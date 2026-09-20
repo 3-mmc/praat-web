@@ -10,6 +10,10 @@ python3 serve.py        # then open http://127.0.0.1:8710
 
 Python 3.8 or later, standard library only. There is no build step, no `pip install`, and no Node. On first run the server downloads the `praat-wasm` package (about 24 MB) into `vendor/` and caches it.
 
+![praat-web analysing a German recording: waveform, intensity, spectrogram with formant and f0 tracks, and word and phone tiers underneath](docs/fig-german.png)
+
+A spoken German text about the 2010 Haiti earthquake, at 35.9 seconds. One model has filled both tiers in a single pass, German orthography above and IPA below, with each phone placed at the frame where the model committed to it. The cursor sits on the 160 ms /ɑ/ of *kamen*, and the row under the spectrogram reads that instant off the analysis: f0 204 Hz, F1 768 Hz, F2 1274 Hz, F3 2760 Hz, 77.9 dB. Every Praat argument that produced the picture is in the right-hand column, and the literal command line is printed beneath them.
+
 ## What you get with no backend at all
 
 - A waveform of the visible window, with an overview strip for moving through the file, and a selection you can drag, play and zoom to.
@@ -17,7 +21,7 @@ Python 3.8 or later, standard library only. There is no build step, no `pip inst
 - An **intensity** curve on its own decibel axis.
 - A cursor readout of time, cursor frequency, f0, F1 to F3, intensity and the annotation label underneath.
 - Word and phone tiers, and a **segment table** giving every interval a start, an end and a duration in milliseconds, exportable as TSV.
-- Selection statistics: duration, the equivalent frequency, mean f0 over the voiced frames, and how many intervals the selection covers.
+- Selection statistics: duration, its reciprocal in hertz as Praat reports it, mean f0 over the voiced frames, and how many intervals the selection covers.
 - **TextGrid export**, including an empty grid spanning the file, which is how a hand annotation begins in Praat.
 
 Analysis runs on the visible window only, as Praat's own editor does. The cost is roughly 270 ms per second of audio, so analysing an hour-long interview in one pass would stall the tab.
@@ -50,6 +54,12 @@ Assigning one model to both tiers is the other useful case. A model such as `ipa
 
 The second thing this arrangement allows is work on languages that have no pronunciation dictionary at all. Forced alignment is unavailable, in practice, wherever a lexicon has not been built, which excludes most of the world's languages and nearly all of the ones that documentation projects are concerned with. Orthographic models such as MMS cover over a thousand languages, and multilingual phone recognisers generalise across inventories precisely because they never consult a lexicon. For Avar, Chechen or Dargwa there is no aligner dictionary to fall back on, yet a phone recogniser will still return IPA with frame-level timing. The tier contract below is deliberately model-agnostic so that this route remains open.
 
+![Georgian analysed in praat-web: the word tier in Mkhedruli from MMS, the phone tier in IPA from PhoneticXeus](docs/fig-georgian.png)
+
+Georgian makes the argument visible. The word tier here is MMS-1b-all with its `kat` adapter, the phone tier is PhoneticXeus, and the cursor sits on the /i/ of ანტარქტიკის. The segment table gives that word as ɑ n tʼ ɑ r kʼ tʼ i kʼ i s, with ejectives where the orthography has ტ and ქ, and each interval timed to the millisecond.
+
+Now read the transcript panel at the bottom right. The speech recogniser inside `ipa` is Whisper, which has almost no Georgian, and it returned a run of Mkhedruli letters that is not what the speaker said. The IPA directly beneath it is right anyway. Nothing that produced those symbols consulted a lexicon or a transcript, so the failure of the one did not propagate into the other. What did propagate is the spacing: the word divisions in that IPA line are wrong, because word intervals come from the transcript and the transcript was wrong. That is the reason the word tier in this figure was assigned to a different model, and the reason the two tiers are worth keeping separate. Audio from [FLEURS](https://huggingface.co/datasets/google/fleurs) `ka_ge`, CC-BY-4.0.
+
 ## What the phone timings actually are, and what they are not
 
 The timings deserve a precise statement, because their usefulness depends on what they measure.
@@ -67,6 +77,10 @@ Two further limits are worth stating plainly. A phone recogniser has its own err
 A transcription is not an event but an interval. Whisper yields its segments lazily and the phone pass runs per segment, so on a long recording there is finished, correct annotation minutes before the request returns. Waiting for the response to draw any of it throws that away, and it also leaves the person in front of the screen unable to tell a working job from a hung one.
 
 So the page draws each tier the moment its model reports, and says what is happening to the other one. A lane that has no annotation yet because its model is still reading the signal is drawn with moving diagonals and the name of the model. A lane whose model has not started is drawn the same way in a different colour and says it is queued. A lane with nothing coming says that instead. The difference between an empty tier and an unfinished one is the difference between a result and a wait, and the two should never look alike.
+
+![The word tier filled and drawn while the phone tier is still being computed, its lane marked with moving diagonals](docs/fig-progressive.png)
+
+The same 113 second recording, part way through. `whisper` has returned and its intervals are drawn, so the transcript is readable and exportable already. `ipa` is still reading the signal, and its lane says which model is working instead of sitting empty. The bar under the toolbar is the recogniser's own reported progress, not an animation standing in for one.
 
 This needs a recogniser that serves `progress` and `partial`, described below. One that serves neither still works, and its tiers fill when the response arrives, which is what would happen anyway.
 
@@ -165,5 +179,7 @@ The analysis is [**Praat**](https://www.fon.hum.uva.nl/praat/) by Paul Boersma a
 If Praat contributed to published work, cite it as its authors ask:
 
 > Boersma, Paul & Weenink, David. *Praat: doing phonetics by computer* [Computer program]. http://www.praat.org/
+
+The German recording in the figures is a listening-comprehension text published by MFL Sunderland, and it is not distributed here. The Georgian recording is from Google's [FLEURS](https://huggingface.co/datasets/google/fleurs) corpus, CC-BY-4.0.
 
 Praat and praat-wasm are GPL-3.0-or-later, and so is this project. See [LICENSE](LICENSE). `vendor/` is not committed. Either let `serve.py` fetch it, or run `npm pack praat-wasm@6.4.6200 && tar xzf praat-wasm-6.4.6200.tgz && mv package vendor`.

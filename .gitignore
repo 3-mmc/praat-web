@@ -1,0 +1,5 @@
+vendor
+vendor/
+*.tgz
+__pycache__/
+.DS_Store

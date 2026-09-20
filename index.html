@@ -88,7 +88,8 @@
   #readout div{padding:4px 9px;border-right:1px solid var(--line2)}
   #readout div:last-child{border-right:0}
   #readout k{display:block;color:var(--dim2);font-size:10px;letter-spacing:.06em;text-transform:uppercase}
-  #readout v{display:block;font-family:var(--mono);font-size:12.5px}
+  #readout v{display:block;font-family:var(--mono);font-size:12.5px;
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* ------------------------------------------------------- side panels */
   .track{border-top:1px solid var(--line2);padding:6px 9px}
@@ -292,6 +293,8 @@
       </div>
       <div class="row tight" style="padding:5px 0 0;border:0">
         <select id="mdWord"><option value="">(none)</option></select>
+        <input id="lngWord" size="4" class="num" placeholder="lang"
+               title="Language code for this model. ISO 639-1 for whisper, 639-3 for mms and owsm. Blank lets the model decide.">
       </div>
       <div class="meta" id="mtWord">orthographic transcription</div>
     </div>
@@ -304,12 +307,12 @@
       </div>
       <div class="row tight" style="padding:5px 0 0;border:0">
         <select id="mdPhone"><option value="">(none)</option></select>
+        <input id="lngPhone" size="4" class="num" placeholder="lang"
+               title="Language code for this model. ISO 639-1 for whisper, 639-3 for mms and owsm. Blank lets the model decide.">
       </div>
       <div class="meta" id="mtPhone">IPA read off the acoustics, with CTC spike times</div>
     </div>
     <div class="row tight">
-      <label>language</label><input id="lang" size="5" class="num" placeholder="auto"
-        title="ISO 639-1 for whisper, 639-3 for mms/owsm. Blank = let the model decide.">
       <label>whisper size</label>
       <select id="asrsize" class="num">
         <option value="">default</option>
@@ -420,7 +423,7 @@ const CFG = {
   asrBase: '',               // '' = same origin
   ctrlBase: '/upstream/asr',
   wordModel: '', phoneModel: '',
-  lang: '', size: 'medium', nameTiers: false,
+  langWord: '', langPhone: '', size: 'medium', nameTiers: false,
 };
 const CFG_KEY = 'praat-web.config';
 try { Object.assign(CFG, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch {}
@@ -431,7 +434,11 @@ try { Object.assign(CFG, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } c
   if (q.has('provider')) { CFG.provider = q.get('provider'); CFG.mode = 'broker'; }
   if (q.has('words')) CFG.wordModel = q.get('words');
   if (q.has('phones')) CFG.phoneModel = q.get('phones');
+  if (q.has('lang')) CFG.langWord = CFG.langPhone = q.get('lang');
 }
+// One language box became two when it turned out that mms wants ISO 639-3 and
+// whisper wants 639-1, so a single field could not serve both tiers at once.
+if (CFG.lang) { CFG.langWord = CFG.langWord || CFG.lang; CFG.langPhone = CFG.langPhone || CFG.lang; delete CFG.lang; }
 const saveCfg = () => { try { localStorage.setItem(CFG_KEY, JSON.stringify(CFG)); } catch {} };
 
 /* Where this page is mounted. llama-swap serves it under /upstream/praat/, and
@@ -669,6 +676,11 @@ async function analyse() {
 
     S.analysis = { spec, pitch, formants, intensity, t0, t1, p };
     drawAll();
+    /* Re-read the cursor against the analysis that has just arrived. Clicking a
+       segment moves the window and probes in the same gesture, and the probe
+       used to run against the previous window, where the cursor time falls
+       outside the matrices and every field reads as a dash. */
+    if (S.cursor != null) probe(S.cursor);
     status(`${f2(t1 - t0)} s analysed in ${f2((performance.now() - started) / 1000)} s`);
   } catch (e) {
     status('analysis failed: ' + (e.message || e), true);
@@ -1245,7 +1257,9 @@ function probe(t, cursorHz) {
     const iv = A.intensity ? sampleAt(A.intensity, t, A.t0) : NaN;
     $('rInt').textContent = isFinite(iv) ? iv.toFixed(1) + ' dB' : '—';
   }
-  $('rLab').textContent = labelAt(t);
+  const lab = labelAt(t);
+  $('rLab').textContent = lab;
+  $('rLab').title = lab;
 }
 
 $('zoomIn').addEventListener('click', () => {
@@ -1480,8 +1494,10 @@ for (const [key, id] of [['word', 'mdWord'], ['phone', 'mdPhone']]) {
     saveCfg(); renderPlan(); drawTiers();
   });
 }
-$('lang').value = CFG.lang; $('asrsize').value = CFG.size;
-$('lang').addEventListener('change', () => { CFG.lang = $('lang').value.trim(); saveCfg(); });
+$('lngWord').value = CFG.langWord; $('lngPhone').value = CFG.langPhone;
+$('asrsize').value = CFG.size;
+$('lngWord').addEventListener('change', () => { CFG.langWord = $('lngWord').value.trim(); saveCfg(); });
+$('lngPhone').addEventListener('change', () => { CFG.langPhone = $('lngPhone').value.trim(); saveCfg(); });
 $('asrsize').addEventListener('change', () => { CFG.size = $('asrsize').value; saveCfg(); });
 $('nameTiers').checked = CFG.nameTiers;
 $('nameTiers').addEventListener('change', () => { CFG.nameTiers = $('nameTiers').checked; saveCfg(); });
@@ -1661,7 +1677,12 @@ function applyCues(cues, source, state, claims) {
   const targets = claims || [...(hasWords ? ['word'] : []), ...(hasPhones ? ['phone'] : [])];
   for (const k of targets) {
     if (k === 'phone' && !hasPhones && state === 'partial') continue;
-    assignTrack(k, cues, source, state);
+    /* A finished tier is never replaced by a partial one. The poller awaits its
+       /partial fetch, so a request issued just before the final response can
+       resolve just after it, and without this the completed tier flickered back
+       to "17 so far" and stayed there. */
+    if (state === 'partial' && S.tracks[k].state === 'done') continue;
+    assignTrack(k, cues, claims ? source : source + ' (adopted)', state);
   }
   const richer = cues.some(c => (c.words || []).some(w => (w.phones || []).length));
   const already = S.transcript.some(c => (c.words || []).some(w => (w.phones || []).length));
@@ -1734,7 +1755,7 @@ async function runJob(job) {
   fd.append('model', job.model);
   fd.append('response_format', 'verbose_json');
   if (NET.mode === 'broker' && NET.provider) fd.append('provider', NET.provider.id);
-  const lang = $('lang').value.trim();
+  const lang = (job.claims.includes('word') ? $('lngWord').value : $('lngPhone').value).trim();
   if (lang) fd.append('language', lang);
   if ($('asrsize').value && sizeApplies(job.model)) fd.append('asr_model', $('asrsize').value);
 
@@ -1757,7 +1778,6 @@ async function runJob(job) {
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
 
     const cues = body.cues || [];
-    for (const k of job.claims) assignTrack(k, cues, job.model, 'done');
     applyCues(cues, job.model, 'done', job.claims);
     if (!cues.length && (body.text || '').trim()) {
       mergeTranscript([{ start: 0, end: S.dur, plain: body.text.trim() }]);
@@ -1938,9 +1958,14 @@ async function adoptRunningJob() {
   // nothing.
   if (!S.tracks.word.model && !S.tracks.phone.model) return;
   const j = await NET.progress();
-  if (!j) return;
-  if (j.active) { showBusy(j); startPolling(); }
-  if (j.active || j.cues_ready) await pullPartial(j);
+  /* Only a job that is still RUNNING may be adopted. The service keeps its last
+     partial feed around after a job ends, and loading a second file used to
+     paint the previous file's cues onto it, which is worse than showing
+     nothing: the tiers looked like a result. */
+  if (!j || !j.active) return;
+  showBusy(j);
+  startPolling();
+  await pullPartial(j);
 }
 </script>
 </body>

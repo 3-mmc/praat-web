@@ -24,7 +24,7 @@ Analysis runs on the visible window only, as Praat's own editor does. The cost i
 
 ## The arguments are on screen, because they are the analysis
 
-Every argument Praat receives is an editable field, and underneath them the page prints the literal command line it will run:
+Every argument that shapes the analysis is an editable field, and underneath them the page prints the literal command line it will run:
 
 ```
 Extract part... 0.000 6.540 rectangular 1 no
@@ -68,9 +68,11 @@ A transcription is not an event but an interval. Whisper yields its segments laz
 
 So the page draws each tier the moment its model reports, and says what is happening to the other one. A lane that has no annotation yet because its model is still reading the signal is drawn with moving diagonals and the name of the model. A lane whose model has not started is drawn the same way in a different colour and says it is queued. A lane with nothing coming says that instead. The difference between an empty tier and an unfinished one is the difference between a result and a wait, and the two should never look alike.
 
-This works against any recogniser that implements the two optional endpoints described below. Against one that does not, the tiers fill when the response arrives, which is the behaviour you would get anyway.
+This needs a recogniser that serves `progress` and `partial`, described below. One that serves neither still works, and its tiers fill when the response arrives, which is what would happen anyway.
 
-The same machinery survives a reload. The page asks the recogniser what it is doing before it asks anything else, adopts a job it did not start, and works out from the content of the cues which tier that job can fill. A reload in the middle of a long run therefore shows the progress and the annotation so far, rather than an inviting Run button whose only possible outcome is a refusal.
+The same machinery survives a reload. The page asks the recogniser what it is doing, adopts a job it did not start, and works out from the content of the cues which tier that job can fill. A reload during a long run therefore shows the progress and the annotation so far, rather than an inviting Run button whose only possible outcome is a refusal.
+
+It asks late, and deliberately. On a gateway that swaps models through one GPU, requesting the recogniser's progress is enough to make the gateway start the recogniser, which unloads whatever else was holding the card. Opening a spectrogram would then evict a colleague's language model before any audio had been chosen. The question is therefore held back until audio is loaded and a tier has a model assigned, which together mean recognition is actually intended. Nothing is lost by waiting, because a browser cannot keep a file across a reload either.
 
 ## Getting the annotation out
 

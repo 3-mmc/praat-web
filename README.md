@@ -23,6 +23,7 @@ A spoken German text about the 2010 Haiti earthquake, at 35.9 seconds. One model
 - Word and phone tiers, and a **segment table** giving every interval a start, an end and a duration in milliseconds, exportable as TSV.
 - Selection statistics: duration, its reciprocal in hertz as Praat reports it, mean f0 over the voiced frames, and how many intervals the selection covers.
 - **TextGrid export**, including an empty grid spanning the file, which is how a hand annotation begins in Praat.
+- Two colour schemes. **Graphite** is the default, and **Paper** puts the analysis on white so the screen shows what a figure will look like on the page. Both keep Praat's convention of dark for loud, because a phonetics tool should not invert the picture every textbook uses.
 
 Analysis runs on the visible window only, as Praat's own editor does. The cost is roughly 270 ms per second of audio, so analysing an hour-long interview in one pass would stall the tab.
 

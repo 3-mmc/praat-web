@@ -13,12 +13,41 @@
 <title>praat-web</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230e1016'/%3E%3Cg stroke='%236ea8fe' stroke-width='1.4' stroke-linecap='round'%3E%3Cpath d='M2 8v0'/%3E%3Cpath d='M4.5 5.5v5'/%3E%3Cpath d='M7 3v10'/%3E%3Cpath d='M9.5 5v6'/%3E%3Cpath d='M12 6.5v3'/%3E%3Cpath d='M14 8v0'/%3E%3C/g%3E%3C/svg%3E">
 <style>
+  /* Every colour on the page and on the canvases comes from this block. The
+     drawing code reads the same custom properties through getComputedStyle, so
+     a theme is one set of tokens rather than a hunt through the painting
+     functions. Neutral greys throughout: the chrome of an audio editor should
+     be the least saturated thing on screen, leaving the signal and the
+     annotation as the only colour that carries meaning. */
   :root{
-    --bg:#0e1016; --panel:#161922; --panel2:#11141c; --line:#2a2f3d; --line2:#1e2330;
-    --ink:#e7e9ef; --dim:#8b93a7; --dim2:#646c80;
-    --accent:#6ea8fe; --f0:#ffd166; --f1:#ff6b6b; --f2:#4ecdc4; --f3:#c792ea;
-    --int:#8fd694; --ok:#7bd88f; --warn:#ffb86c; --err:#ff6b6b;
+    --bg:#1b1b1d; --panel:#252528; --panel2:#202023; --sunken:#131315; --raise:#2e2e33;
+    --line:#3a3a3f; --line2:#2c2c31; --boundary:#4d4d55;
+    --ink:#e7e7ea; --dim:#a2a2a9; --dim2:#75757e; --wave:#8e8e99;
+    --accent:#4a9eff;
+    --f0:#e8b339; --f1:#ef6f5e; --f2:#45b0a4; --f3:#a98ada; --int:#6fbf73;
+    --ok:#5fb86a; --warn:#d69a3c; --err:#e0605c;
+    --accentline:#2c4d73; --okline:#3a5a3e; --warnline:#5c4a2a; --errline:#5c3230;
+    --rowhover:#2e2e33; --rowsel:#2b3f57;
+    /* Spectrogram ramp. Praat's convention is dark for loud on a light ground,
+       and a phonetics tool should not invert the picture every textbook uses.
+       The light end is pulled off pure white so the pane does not glare. */
+    --spec-quiet:#f0f0f1; --spec-loud:#0e0e10;
+    --hilite:rgba(255,255,255,.045);
     --mono:"DejaVu Sans Mono","Noto Sans Mono",ui-monospace,SFMono-Regular,monospace;
+  }
+  /* For figures. A spectrogram on white is what goes into a paper, and the
+     screen should be able to show what the figure will look like. */
+  :root[data-theme="paper"]{
+    --bg:#dededf; --panel:#f4f4f5; --panel2:#e9e9ea; --sunken:#ffffff; --raise:#e2e2e4;
+    --line:#bcbcc2; --line2:#d5d5da; --boundary:#9a9aa2;
+    --ink:#17171a; --dim:#55555d; --dim2:#7c7c85; --wave:#4a4a54;
+    --accent:#1668c4;
+    --f0:#b57a0c; --f1:#c23a2a; --f2:#127a6e; --f3:#6a42b0; --int:#1f7a35;
+    --ok:#1f7a35; --warn:#9a6a10; --err:#c23a2a;
+    --accentline:#8fb6e4; --okline:#8fc49a; --warnline:#d4b784; --errline:#e0a49c;
+    --rowhover:#e4e8ee; --rowsel:#cfdcef;
+    --spec-quiet:#ffffff; --spec-loud:#000000;
+    --hilite:rgba(255,255,255,.85);
   }
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -30,16 +59,22 @@
 
   /* ------------------------------------------------------------- chrome */
   header{display:flex;gap:7px;align-items:center;flex-wrap:wrap;
-         padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);
+         padding:6px 10px;border-bottom:1px solid var(--line);
+         background:linear-gradient(var(--raise),var(--panel));
+         box-shadow:inset 0 1px 0 var(--hilite);
          position:sticky;top:0;z-index:6}
-  select,input,button,textarea{background:#0b0d13;color:var(--ink);border:1px solid var(--line);
-       border-radius:5px;padding:4px 7px;font:inherit}
+  select,input,textarea{background:var(--sunken);color:var(--ink);border:1px solid var(--line);
+       border-radius:3px;padding:4px 7px;font:inherit}
+  button{background:var(--raise);color:var(--ink);border:1px solid var(--line);
+       border-radius:3px;padding:4px 7px;font:inherit;
+       box-shadow:inset 0 1px 0 var(--hilite)}
+  button:active:not(:disabled){box-shadow:none;background:var(--panel2)}
   input.num,select.num{font-family:var(--mono)}
   input[type=file]{padding:2px;max-width:220px}
   button{cursor:pointer}
   button:hover:not(:disabled){border-color:var(--accent)}
   button:disabled{opacity:.4;cursor:not-allowed}
-  button.primary{background:var(--accent);color:#08101f;border-color:var(--accent);font-weight:600}
+  button.primary{background:var(--accent);color:var(--panel);border-color:var(--accent);font-weight:600}
   button.tiny{padding:1px 6px;font-size:11px}
   .sp{flex:1}
   #status{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
@@ -47,10 +82,10 @@
   .chip{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border:1px solid var(--line);
         border-radius:999px;font-size:11px;color:var(--dim);background:var(--panel2)}
   .chip b{color:var(--ink);font-weight:600}
-  .chip.live{border-color:#2f5d3a;color:var(--ok)}
-  .chip.none{border-color:#5d3a2f;color:var(--warn)}
+  .chip.live{border-color:var(--okline);color:var(--ok)}
+  .chip.none{border-color:var(--warnline);color:var(--warn)}
 
-  #bar{height:2px;background:#0b0d13;position:sticky;top:33px;z-index:5}
+  #bar{height:2px;background:var(--sunken);position:sticky;top:33px;z-index:5}
   #barfill{height:100%;width:0;background:var(--accent);transition:width .3s linear}
   #bar.indet #barfill{width:32%;animation:slide 1.4s ease-in-out infinite}
   @keyframes slide{0%{margin-left:-32%}100%{margin-left:100%}}
@@ -60,12 +95,14 @@
   @media (max-width:1100px){main{grid-template-columns:minmax(0,1fr)}}
   .col{display:flex;flex-direction:column;gap:9px;min-width:0}
 
-  .pane{background:var(--panel);border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .pane{background:var(--panel);border:1px solid var(--line);border-radius:4px;overflow:hidden}
   .pane>h2{margin:0;padding:4px 9px;font-size:10.5px;letter-spacing:.09em;
-        text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--line2);
-        display:flex;gap:9px;align-items:center;background:var(--panel2)}
+        text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--line);
+        display:flex;gap:9px;align-items:center;
+        background:linear-gradient(var(--raise),var(--panel2));
+        box-shadow:inset 0 1px 0 var(--hilite)}
   .pane>h2 .sub{text-transform:none;letter-spacing:0;font-size:11px;color:var(--dim2)}
-  canvas{display:block;width:100%}
+  canvas{display:block;width:100%;background:var(--sunken)}
   #wave{height:118px;cursor:crosshair}
   #overview{height:30px;cursor:pointer;border-bottom:1px solid var(--line2)}
   #intens{height:66px;cursor:crosshair}
@@ -100,10 +137,10 @@
   .track select{flex:1;min-width:0}
   .state{font-size:10.5px;padding:1px 6px;border-radius:999px;border:1px solid var(--line);
          color:var(--dim);white-space:nowrap}
-  .state[data-s="running"],.state[data-s="partial"]{color:var(--accent);border-color:#2b4570}
-  .state[data-s="done"]{color:var(--ok);border-color:#2f5d3a}
-  .state[data-s="queued"]{color:var(--warn);border-color:#5d4a2f}
-  .state[data-s="failed"]{color:var(--err);border-color:#5d2f2f}
+  .state[data-s="running"],.state[data-s="partial"]{color:var(--accent);border-color:var(--accentline)}
+  .state[data-s="done"]{color:var(--ok);border-color:var(--okline)}
+  .state[data-s="queued"]{color:var(--warn);border-color:var(--warnline)}
+  .state[data-s="failed"]{color:var(--err);border-color:var(--errline)}
   .spin{display:inline-block;width:9px;height:9px;border-radius:50%;
         border:1.5px solid currentColor;border-top-color:transparent;
         animation:rot .8s linear infinite;vertical-align:-1px;margin-right:4px}
@@ -118,7 +155,7 @@
   .params label{font-size:11px}
   .params input,.params select{width:86px;text-align:right;padding:2px 5px;font-family:var(--mono);font-size:11.5px}
   .params select{text-align:left}
-  pre.cmd{margin:0;padding:6px 9px;background:#090b10;border-top:1px solid var(--line2);
+  pre.cmd{margin:0;padding:6px 9px;background:var(--sunken);border-top:1px solid var(--line2);
       font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:pre-wrap;word-break:break-word}
   pre.cmd b{color:var(--ink);font-weight:400}
 
@@ -129,8 +166,8 @@
   table.seg th.l,table.seg td.l{text-align:left}
   table.seg td{padding:2px 6px;text-align:right;border-bottom:1px solid var(--line2);color:var(--dim)}
   table.seg td.l{color:var(--ink)}
-  table.seg tr:hover td{background:#1b2030;cursor:pointer}
-  table.seg tr.sel td{background:#22304a}
+  table.seg tr:hover td{background:var(--rowhover);cursor:pointer}
+  table.seg tr.sel td{background:var(--rowsel)}
   .scroll{max-height:260px;overflow:auto}
   #transcript{padding:7px 9px;max-height:200px;overflow:auto;font-size:12px;line-height:1.55}
   #transcript .cue{margin-bottom:5px}
@@ -138,12 +175,12 @@
   #transcript .ipa{color:var(--f2);display:block;margin-left:2px}
 
   /* --------------------------------------------------------- settings */
-  #settings{background:#141824;border-bottom:1px solid var(--line)}
-  #settings code{background:#0b0d13;padding:1px 4px;border-radius:3px;font-family:var(--mono)}
+  #settings{background:var(--panel2);border-bottom:1px solid var(--line)}
+  #settings code{background:var(--sunken);padding:1px 4px;border-radius:2px;font-family:var(--mono)}
   #settings .grid{display:grid;grid-template-columns:auto 1fr;gap:6px 9px;padding:8px 10px;align-items:center}
   .modehdr{display:flex;gap:14px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line2)}
   .modehdr label{display:flex;gap:5px;align-items:center;color:var(--ink);font-size:12px;cursor:pointer}
-  fieldset{border:1px solid var(--line2);border-radius:6px;margin:8px 10px;padding:0}
+  fieldset{border:1px solid var(--line2);border-radius:3px;margin:8px 10px;padding:0}
   fieldset[disabled]{opacity:.45}
   legend{font-size:10.5px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase;padding:0 5px}
 
@@ -157,6 +194,10 @@
   <button id="run" class="primary" disabled>Run recognition</button>
   <button id="stop" hidden>■ Stop</button>
   <button id="gear" title="Recogniser connection">⚙ Connection</button>
+  <select id="theme" title="Colour scheme. Paper is what a figure will look like on the page.">
+    <option value="graphite">Graphite</option>
+    <option value="paper">Paper</option>
+  </select>
   <span id="connchip" class="chip none">no recogniser</span>
   <span class="sp"></span>
   <span id="status">loading Praat…</span>
@@ -409,6 +450,37 @@ const status = (msg, err = false) => {
   $('status').classList.toggle('err', err);
 };
 const num = (id, dflt) => { const v = Number($(id).value); return isFinite(v) ? v : dflt; };
+
+/* ------------------------------------------------------------- palette */
+/* The canvases read the same custom properties as the stylesheet, so a theme
+   is defined once in :root and nothing here has to know which one is active.
+   Re-read on every theme change: getComputedStyle resolves var() at the time
+   it is called, and a canvas keeps whatever it was painted with. */
+const C = {};
+const TOKENS = ['bg', 'panel', 'panel2', 'sunken', 'raise', 'line', 'line2', 'boundary',
+                'ink', 'dim', 'dim2', 'wave', 'accent', 'f0', 'f1', 'f2', 'f3', 'int',
+                'ok', 'warn', 'err', 'mono', 'spec-quiet', 'spec-loud'];
+const hexToRgb = h => {
+  h = h.trim().replace('#', '');
+  if (h.length === 3) h = [...h].map(c => c + c).join('');
+  const n = parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+function readPalette() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const t of TOKENS) C[t.replace('-q', 'Q').replace('-l', 'L')] = cs.getPropertyValue('--' + t).trim();
+  C.specQuietRGB = hexToRgb(C.specQuiet);
+  C.specLoudRGB = hexToRgb(C.specLoud);
+  C.formants = [C.f1, C.f2, C.f3];
+}
+/* Translucent overlays (selection wash, gridlines, the hatching on a lane that
+   is still being computed) have to follow the theme too, so derive them from
+   the token rather than writing a second set of colours. */
+const alpha = (col, a) => {
+  const [r, g, b] = hexToRgb(col);
+  return `rgba(${r},${g},${b},${a})`;
+};
+readPalette();
 const f2 = v => (isFinite(v) ? v.toFixed(2) : '—');
 const f3 = v => (isFinite(v) ? v.toFixed(3) : '—');
 const hz = v => (isFinite(v) && v > 0 ? Math.round(v) + ' Hz' : '—');
@@ -424,6 +496,7 @@ const CFG = {
   ctrlBase: '/upstream/asr',
   wordModel: '', phoneModel: '',
   langWord: '', langPhone: '', size: 'medium', nameTiers: false,
+  theme: 'graphite',
 };
 const CFG_KEY = 'praat-web.config';
 try { Object.assign(CFG, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch {}
@@ -435,7 +508,13 @@ try { Object.assign(CFG, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } c
   if (q.has('words')) CFG.wordModel = q.get('words');
   if (q.has('phones')) CFG.phoneModel = q.get('phones');
   if (q.has('lang')) CFG.langWord = CFG.langPhone = q.get('lang');
+  if (q.has('theme')) CFG.theme = q.get('theme');
 }
+/* Set before anything is painted. readPalette() resolved var() against the
+   default theme when this module loaded, so the stored choice has to be
+   applied and the palette re-read before the first draw. */
+document.documentElement.dataset.theme = CFG.theme || 'graphite';
+readPalette();
 // One language box became two when it turned out that mms wants ISO 639-3 and
 // whisper wants 639-1, so a single field could not serve both tiers at once.
 if (CFG.lang) { CFG.langWord = CFG.langWord || CFG.lang; CFG.langPhone = CFG.langPhone || CFG.lang; delete CFG.lang; }
@@ -727,8 +806,8 @@ function drawTimeAxis(F, t0, t1) {
   const { g, x0, x1, y1, h } = F;
   const span = t1 - t0;
   const step = niceStep(span, Math.max(3, Math.round(F.iw / 90)));
-  g.strokeStyle = '#2a2f3d'; g.fillStyle = '#646c80';
-  g.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  g.strokeStyle = C.line; g.fillStyle = C.dim2;
+  g.font = '10px ' + C.mono;
   g.textAlign = 'center'; g.textBaseline = 'top';
   g.beginPath();
   for (let t = Math.ceil(t0 / step) * step; t <= t1 + 1e-9; t += step) {
@@ -744,8 +823,8 @@ function drawVAxis(F, lo, hi, unit, colour, right = false) {
   const { g, x0, x1, y0, y1, ih } = F;
   const span = hi - lo;
   const step = niceStep(span, Math.max(2, Math.round(ih / 42)));
-  g.strokeStyle = '#242a38'; g.fillStyle = colour;
-  g.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  g.strokeStyle = C.line2; g.fillStyle = colour;
+  g.font = '10px ' + C.mono;
   g.textAlign = right ? 'left' : 'right'; g.textBaseline = 'middle';
   g.beginPath();
   for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) {
@@ -769,9 +848,9 @@ function shadeSelection(F, t0, t1) {
   const a = Math.max(t0, S.sel[0]), b = Math.min(t1, S.sel[1]);
   if (b <= a) return;
   const xa = x0 + (a - t0) / (t1 - t0) * iw, xb = x0 + (b - t0) / (t1 - t0) * iw;
-  g.fillStyle = 'rgba(110,168,254,0.14)';
+  g.fillStyle = alpha(C.accent, 0.14);
   g.fillRect(xa, y0, xb - xa, y1 - y0);
-  g.strokeStyle = 'rgba(110,168,254,0.55)';
+  g.strokeStyle = alpha(C.accent, 0.55);
   g.beginPath();
   g.moveTo(xa + .5, y0); g.lineTo(xa + .5, y1);
   g.moveTo(xb - .5, y0); g.lineTo(xb - .5, y1);
@@ -782,7 +861,7 @@ function drawCursor(F, t0, t1) {
   if (S.cursor == null || S.cursor < t0 || S.cursor > t1) return;
   const { g, x0, y0, y1, iw } = F;
   const x = x0 + (S.cursor - t0) / (t1 - t0) * iw;
-  g.strokeStyle = 'rgba(231,233,239,0.55)';
+  g.strokeStyle = alpha(C.ink, 0.55);
   g.setLineDash([3, 3]);
   g.beginPath(); g.moveTo(x + .5, y0); g.lineTo(x + .5, y1); g.stroke();
   g.setLineDash([]);
@@ -792,8 +871,8 @@ function drawOverview() {
   const F = fit($('overview')); if (!F || !S.audio) return;
   const { g, x0, x1, y0, y1, iw, ih } = F;
   const d = S.audio.getChannelData(0), n = d.length, mid = (y0 + y1) / 2;
-  g.fillStyle = '#0b0d13'; g.fillRect(x0, y0, iw, ih);
-  g.strokeStyle = '#39415a'; g.beginPath();
+  g.fillStyle = C.sunken; g.fillRect(x0, y0, iw, ih);
+  g.strokeStyle = C.dim2; g.beginPath();
   for (let x = 0; x < iw; x++) {
     const a = Math.floor(x / iw * n), b = Math.max(a + 1, Math.floor((x + 1) / iw * n));
     let lo = 1, hi = -1;
@@ -802,12 +881,18 @@ function drawOverview() {
     g.moveTo(x0 + x + .5, mid - hi * ih / 2); g.lineTo(x0 + x + .5, mid - lo * ih / 2);
   }
   g.stroke();
+  /* The window marker is a locator, so it stays quiet: a faint wash and two
+     bright edges, rather than a block of colour over the whole overview. */
   const wa = x0 + S.win[0] / S.dur * iw, wb = x0 + S.win[1] / S.dur * iw;
-  g.fillStyle = 'rgba(110,168,254,0.18)'; g.fillRect(wa, y0, Math.max(2, wb - wa), ih);
-  g.strokeStyle = '#6ea8fe';
-  g.strokeRect(wa + .5, y0 + .5, Math.max(2, wb - wa) - 1, ih - 1);
-  g.fillStyle = '#646c80';
-  g.font = '9.5px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  const ww = Math.max(2, wb - wa);
+  g.fillStyle = alpha(C.accent, 0.10); g.fillRect(wa, y0, ww, ih);
+  g.strokeStyle = alpha(C.accent, 0.75);
+  g.beginPath();
+  g.moveTo(wa + .5, y0); g.lineTo(wa + .5, y1);
+  g.moveTo(wa + ww - .5, y0); g.lineTo(wa + ww - .5, y1);
+  g.stroke();
+  g.fillStyle = C.dim2;
+  g.font = '9.5px ' + C.mono;
   g.textAlign = 'right'; g.textBaseline = 'middle';
   g.fillText('file', x0 - 5, (y0 + y1) / 2);
   g.textAlign = 'left';
@@ -826,10 +911,10 @@ function drawWave() {
   for (let i = i0; i < i1; i += Math.max(1, ((i1 - i0) / 20000) | 0))
     { const v = Math.abs(d[i]); if (v > peak) peak = v; }
   const norm = peak > 1e-4 ? 1 / peak : 1;
-  drawVAxis(F, -1, 1, 'rel. amp', '#646c80');
+  drawVAxis(F, -1, 1, 'rel. amp', C.dim2);
   shadeSelection(F, t0, t1);
 
-  g.strokeStyle = '#7f8db0'; g.beginPath();
+  g.strokeStyle = C.wave; g.beginPath();
   const samplesPerPx = (i1 - i0) / iw;
   if (samplesPerPx < 1.5) {
     // Few enough samples to draw the actual waveform rather than a min/max band.
@@ -849,13 +934,13 @@ function drawWave() {
     }
   }
   g.stroke();
-  g.strokeStyle = '#2a2f3d';
+  g.strokeStyle = C.line;
   g.beginPath(); g.moveTo(x0, mid + .5); g.lineTo(F.x1, mid + .5); g.stroke();
   drawCursor(F, t0, t1);
   drawTimeAxis(F, t0, t1);
   if (peak > 0) {
-    g.fillStyle = '#646c80'; g.textAlign = 'left'; g.textBaseline = 'top';
-    g.font = '9.5px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    g.fillStyle = C.dim2; g.textAlign = 'left'; g.textBaseline = 'top';
+    g.font = '9.5px ' + C.mono;
     g.fillText('peak ' + (20 * Math.log10(peak)).toFixed(1) + ' dBFS', x0 + 4, y0 + 2);
   }
 }
@@ -873,9 +958,9 @@ function drawIntensity() {
   if (!isFinite(lo)) return;
   lo = Math.floor(lo / 5) * 5; hi = Math.ceil(hi / 5) * 5;
   if (hi - lo < 10) hi = lo + 10;
-  drawVAxis(F, lo, hi, 'dB', '#646c80');
+  drawVAxis(F, lo, hi, 'dB', C.dim2);
   shadeSelection(F, S.win[0], S.win[1]);
-  g.strokeStyle = '#8fd694'; g.lineWidth = 1.4; g.beginPath();
+  g.strokeStyle = C.int; g.lineWidth = 1.4; g.beginPath();
   let started = false;
   for (let i = 0; i < m.nx; i++) {
     const v = row[i];
@@ -897,9 +982,9 @@ function drawSpec() {
   const F = fit($('spec')); if (!F) return;
   const { g, x0, y0, y1, iw, ih } = F;
   const A = S.analysis;
-  const mono = getComputedStyle(document.body).getPropertyValue('--mono');
+  const mono = C.mono;
   if (!A) {
-    g.fillStyle = '#646c80'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = C.dim2; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.font = '12px ui-sans-serif';
     g.fillText('no analysis yet', F.w / 2, F.h / 2);
     return;
@@ -931,6 +1016,7 @@ function drawSpec() {
      Sampling per screen pixel, as this used to do, throws away frames whenever
      the window is wider than the pane and cannot place the image anywhere but
      across the whole box. */
+  const lo = C.specLoudRGB, hi = C.specQuietRGB;
   const off = document.createElement('canvas');
   off.width = spec.nx; off.height = spec.ny;
   const og = off.getContext('2d');
@@ -939,9 +1025,12 @@ function drawSpec() {
     const row = db[spec.ny - 1 - y];
     for (let x = 0; x < spec.nx; x++) {
       const t = Math.max(0, Math.min(1, ((row ? row[x] : floor) - floor) / p.dyn));
-      const v = Math.round(255 * (1 - t));           // dark = loud, as in Praat
+      // Dark for loud, as in Praat, but between the theme's two greys rather
+      // than between pure black and pure white.
       const o = (y * spec.nx + x) * 4;
-      img.data[o] = img.data[o + 1] = img.data[o + 2] = v; img.data[o + 3] = 255;
+      for (let k = 0; k < 3; k++)
+        img.data[o + k] = Math.round(lo[k] * t + hi[k] * (1 - t));
+      img.data[o + 3] = 255;
     }
   }
   og.putImageData(img, 0, 0);
@@ -956,7 +1045,7 @@ function drawSpec() {
 
   // Frequency gridlines over the image, faint so they do not read as energy.
   const step = niceStep(p.maxHz, Math.max(2, Math.round(ih / 46)));
-  g.strokeStyle = 'rgba(110,168,254,0.16)'; g.fillStyle = '#646c80';
+  g.strokeStyle = alpha(C.accent, 0.16); g.fillStyle = C.dim2;
   g.font = '10px ' + mono;
   g.textAlign = 'right'; g.textBaseline = 'middle';
   g.beginPath();
@@ -974,7 +1063,7 @@ function drawSpec() {
      spectrogram's own scale would put a 120 Hz pitch inside the first formant,
      which is a picture that invites a wrong reading. */
   const f0max = p.pitchCeil;
-  g.fillStyle = '#ffd166'; g.textAlign = 'left';
+  g.fillStyle = C.f0; g.textAlign = 'left';
   const fstep = niceStep(f0max, Math.max(2, Math.round(ih / 46)));
   for (let f = fstep; f <= f0max - 1e-9; f += fstep)
     g.fillText(String(Math.round(f)), F.x1 + 5, y1 - f / f0max * ih);
@@ -985,7 +1074,7 @@ function drawSpec() {
   g.beginPath(); g.rect(x0, y0, iw, ih); g.clip();
   g.globalAlpha = stale ? 0.5 : 1;
   if ($('showFmt').checked) {
-    const cols = ['#ff6b6b', '#4ecdc4', '#c792ea'];
+    const cols = C.formants;
     A.formants.forEach((m, i) => {
       g.fillStyle = cols[i];
       const row = m.rows[0]; if (!row) return;
@@ -999,7 +1088,7 @@ function drawSpec() {
   if ($('showF0').checked) {
     const m = A.pitch, row = m.rows[0];
     if (row) {
-      g.strokeStyle = '#ffd166'; g.lineWidth = 2; g.beginPath();
+      g.strokeStyle = C.f0; g.lineWidth = 2; g.beginPath();
       let on = false;
       for (let k = 0; k < m.nx; k++) {
         const f = row[k];
@@ -1016,7 +1105,7 @@ function drawSpec() {
   g.restore();
 
   if (stale) {
-    g.fillStyle = '#ffb86c'; g.textAlign = 'left'; g.textBaseline = 'top';
+    g.fillStyle = C.warn; g.textAlign = 'left'; g.textBaseline = 'top';
     g.font = '10px ' + mono;
     g.fillText(`analysed ${f3(A.t0)}–${f3(A.t1)} s — re-analysing`, x0 + 5, y0 + 3);
   }
@@ -1054,21 +1143,21 @@ function drawTiers() {
     { key: 'phone', label: 'phones' },
   ];
   const lh = (y1 - y0) / lanes.length;
-  const mono = getComputedStyle(document.body).getPropertyValue('--mono');
+  const mono = C.mono;
 
   lanes.forEach((lane, i) => {
     const t = S.tracks[lane.key];
     const ly = y0 + i * lh;
-    g.fillStyle = '#0b0d13'; g.fillRect(x0, ly, iw, lh - 2);
-    g.strokeStyle = '#2a2f3d'; g.strokeRect(x0 + .5, ly + .5, iw - 1, lh - 3);
+    g.fillStyle = C.sunken; g.fillRect(x0, ly, iw, lh - 2);
+    g.strokeStyle = C.line; g.strokeRect(x0 + .5, ly + .5, iw - 1, lh - 3);
 
     // gutter: tier name, then which model filled it
-    g.fillStyle = '#8b93a7'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    g.fillStyle = C.dim; g.textAlign = 'right'; g.textBaseline = 'middle';
     g.font = '11px ui-sans-serif';
     g.fillText(lane.label, x0 - 6, ly + lh / 2 - 6);
-    g.fillStyle = t.state === 'done' ? '#7bd88f'
-                : t.state === 'failed' ? '#ff6b6b'
-                : (t.state === 'running' || t.state === 'partial') ? '#6ea8fe' : '#646c80';
+    g.fillStyle = t.state === 'done' ? C.ok
+                : t.state === 'failed' ? C.err
+                : (t.state === 'running' || t.state === 'partial') ? C.accent : C.dim2;
     g.font = '9.5px ' + mono;
     g.fillText(t.source || t.model || '—', x0 - 6, ly + lh / 2 + 7);
 
@@ -1077,7 +1166,7 @@ function drawTiers() {
       // Marching diagonals: unmistakably "being worked on", and not a value.
       g.save();
       g.beginPath(); g.rect(x0 + 1, ly + 1, iw - 2, lh - 4); g.clip();
-      g.strokeStyle = t.state === 'queued' ? 'rgba(255,184,108,0.18)' : 'rgba(110,168,254,0.22)';
+      g.strokeStyle = t.state === 'queued' ? alpha(C.warn, 0.18) : alpha(C.accent, 0.22);
       g.lineWidth = 6;
       g.beginPath();
       for (let x = -lh * 2 + (hatchPhase % 28); x < iw + lh * 2; x += 28) {
@@ -1085,13 +1174,13 @@ function drawTiers() {
       }
       g.stroke(); g.lineWidth = 1;
       g.restore();
-      g.fillStyle = t.state === 'queued' ? '#ffb86c' : '#6ea8fe';
+      g.fillStyle = t.state === 'queued' ? C.warn : C.accent;
       g.textAlign = 'center'; g.font = '11px ui-sans-serif';
       g.fillText(laneCaption(t), (x0 + F.x1) / 2, ly + lh / 2);
       return;
     }
     if (!t.items.length) {
-      g.fillStyle = '#4b5265'; g.textAlign = 'center'; g.font = '11px ui-sans-serif';
+      g.fillStyle = C.dim2; g.textAlign = 'center'; g.font = '11px ui-sans-serif';
       g.fillText(laneCaption(t), (x0 + F.x1) / 2, ly + lh / 2);
       return;
     }
@@ -1101,12 +1190,12 @@ function drawTiers() {
     for (const it of t.items) {
       if (it.end < t0 || it.start > t1) continue;
       const a = Math.max(x0, xOf(it.start)), b = Math.min(F.x1, xOf(it.end));
-      g.fillStyle = it === S.selectedItem ? 'rgba(110,168,254,0.32)' : 'rgba(110,168,254,0.10)';
+      g.fillStyle = it === S.selectedItem ? alpha(C.accent, 0.32) : alpha(C.accent, 0.10);
       g.fillRect(a, ly + 1, Math.max(1, b - a), lh - 4);
-      g.strokeStyle = '#3b4560';
+      g.strokeStyle = C.boundary;
       g.beginPath(); g.moveTo(a + .5, ly + 1); g.lineTo(a + .5, ly + lh - 3); g.stroke();
       if (b - a > 7) {
-        g.fillStyle = '#e7e9ef';
+        g.fillStyle = C.ink;
         g.save();
         g.beginPath(); g.rect(a, ly, Math.max(1, b - a), lh); g.clip();
         g.fillText(it.text || '', (a + b) / 2, ly + lh / 2);
@@ -1117,7 +1206,7 @@ function drawTiers() {
     const last = t.items[t.items.length - 1];
     if (last && last.end <= t1) {
       const x = xOf(last.end);
-      g.strokeStyle = '#3b4560';
+      g.strokeStyle = C.boundary;
       g.beginPath(); g.moveTo(x - .5, ly + 1); g.lineTo(x - .5, ly + lh - 3); g.stroke();
     }
   });
@@ -1499,6 +1588,14 @@ $('asrsize').value = CFG.size;
 $('lngWord').addEventListener('change', () => { CFG.langWord = $('lngWord').value.trim(); saveCfg(); });
 $('lngPhone').addEventListener('change', () => { CFG.langPhone = $('lngPhone').value.trim(); saveCfg(); });
 $('asrsize').addEventListener('change', () => { CFG.size = $('asrsize').value; saveCfg(); });
+$('theme').value = CFG.theme || 'graphite';
+$('theme').addEventListener('change', () => {
+  CFG.theme = $('theme').value;
+  document.documentElement.dataset.theme = CFG.theme;
+  saveCfg();
+  readPalette();
+  drawAll();
+});
 $('nameTiers').checked = CFG.nameTiers;
 $('nameTiers').addEventListener('change', () => { CFG.nameTiers = $('nameTiers').checked; saveCfg(); });
 

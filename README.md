@@ -42,6 +42,14 @@ The practical consequence shapes how the tool is meant to be used. Machine phone
 
 Two further limits are worth stating plainly. A phone recogniser has its own error rate and its own inventory, so a symbol absent from the inventory cannot appear no matter how clearly it was articulated. PhoneticXeus, for instance, returned no tone marks on Vietnamese in testing, which is worth verifying before relying on it for any tonal language. Word intervals, meanwhile, come from a separate forced aligner in most pipelines, so the word tier inherits that aligner's assumptions even when the phone tier does not.
 
+## Getting the annotation out
+
+The export is a TextGrid because that is the format both major annotation tools read. Praat opens it directly. ELAN imports it through File > Import > Praat TextGrid File, adding each tier to the open document or creating a new one, and it accepts UTF-8 as well as UTF-16, so the encoding written here needs no conversion.
+
+That choice matters more for documentation work than for laboratory phonetics. Fieldwork projects generally keep their sessions in ELAN, where phonetic tiers sit on one timeline alongside translation, gloss and gesture tiers. Exporting a TextGrid lets a recogniser's phone tier enter an existing ELAN session, rather than starting a parallel annotation that somebody has to reconcile later. For the undocumented languages discussed above, that is usually the deciding practical question, because the session already exists in ELAN before any acoustic analysis begins.
+
+One point about the import itself. Praat requires the intervals of a tier to tile the file without gaps, so this tool writes an empty interval wherever no word or phone falls. ELAN's import dialog offers "Skip empty intervals / annotations", and leaving that checked keeps the padding out of the ELAN document, where it would otherwise arrive as a run of empty annotations.
+
 ## Connecting a recogniser
 
 If you have a speech-recognition server that speaks the OpenAI audio API, enter its base URL under **⚙** and the word tier fills itself. Anything implementing `POST {base}/v1/audio/transcriptions` will work, whether that is a local Whisper wrapper, llama-swap, or a hosted service.

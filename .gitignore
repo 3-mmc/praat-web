@@ -3,3 +3,4 @@ vendor/
 *.tgz
 __pycache__/
 .DS_Store
+providers.json

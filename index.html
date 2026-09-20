@@ -11,72 +11,152 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>praat-web</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230e1016'/%3E%3Cg stroke='%236ea8fe' stroke-width='1.4' stroke-linecap='round'%3E%3Cpath d='M2 8v0'/%3E%3Cpath d='M4.5 5.5v5'/%3E%3Cpath d='M7 3v10'/%3E%3Cpath d='M9.5 5v6'/%3E%3Cpath d='M12 6.5v3'/%3E%3Cpath d='M14 8v0'/%3E%3C/g%3E%3C/svg%3E">
 <style>
   :root{
-    --bg:#11131a; --panel:#181b24; --line:#2a2f3d; --ink:#e7e9ef; --dim:#8b93a7;
+    --bg:#0e1016; --panel:#161922; --panel2:#11141c; --line:#2a2f3d; --line2:#1e2330;
+    --ink:#e7e9ef; --dim:#8b93a7; --dim2:#646c80;
     --accent:#6ea8fe; --f0:#ffd166; --f1:#ff6b6b; --f2:#4ecdc4; --f3:#c792ea;
-    --ok:#7bd88f; --warn:#ffb86c;
+    --int:#8fd694; --ok:#7bd88f; --warn:#ffb86c; --err:#ff6b6b;
+    --mono:"DejaVu Sans Mono","Noto Sans Mono",ui-monospace,SFMono-Regular,monospace;
   }
   *{box-sizing:border-box}
+  html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--ink);
-       font:13px/1.45 ui-sans-serif,system-ui,"Segoe UI",sans-serif}
-  .ipa{font-family:"DejaVu Sans Mono","Noto Sans Mono",ui-monospace,monospace}
-  header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
-         padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);
-         position:sticky;top:0;z-index:5}
-  select,input,button{background:#0e1017;color:var(--ink);border:1px solid var(--line);
-       border-radius:6px;padding:5px 8px;font:inherit}
-  input[type=file]{padding:3px}
+       font:12.5px/1.45 ui-sans-serif,system-ui,"Segoe UI",sans-serif;
+       font-variant-numeric:tabular-nums}
+  .ipa{font-family:var(--mono)}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  /* ------------------------------------------------------------- chrome */
+  header{display:flex;gap:7px;align-items:center;flex-wrap:wrap;
+         padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);
+         position:sticky;top:0;z-index:6}
+  select,input,button,textarea{background:#0b0d13;color:var(--ink);border:1px solid var(--line);
+       border-radius:5px;padding:4px 7px;font:inherit}
+  input.num,select.num{font-family:var(--mono)}
+  input[type=file]{padding:2px;max-width:220px}
   button{cursor:pointer}
   button:hover:not(:disabled){border-color:var(--accent)}
-  button:disabled{opacity:.45;cursor:not-allowed}
+  button:disabled{opacity:.4;cursor:not-allowed}
   button.primary{background:var(--accent);color:#08101f;border-color:var(--accent);font-weight:600}
+  button.tiny{padding:1px 6px;font-size:11px}
   .sp{flex:1}
-  #status{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
-  #status.err{color:var(--f1)}
-  main{padding:10px 12px 40px}
-  .pane{background:var(--panel);border:1px solid var(--line);border-radius:8px;
-        margin-bottom:10px;overflow:hidden}
-  .pane h2{margin:0;padding:5px 10px;font-size:11px;letter-spacing:.08em;
-        text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--line);
-        display:flex;gap:10px;align-items:center}
-  canvas{display:block;width:100%}
-  #wave{height:90px;cursor:crosshair}
-  #spec{height:300px;cursor:crosshair}
-  #tiers{height:120px}
-  .legend{display:flex;gap:10px;font-size:11px;color:var(--dim);margin-left:auto}
-  .legend b{font-weight:600}
-  .hint{color:var(--dim);font-size:11px;padding:6px 10px}
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 10px}
-  label{color:var(--dim);font-size:11px}
-  #readout{font-family:ui-monospace,monospace;font-size:12px;color:var(--dim);
-           padding:6px 10px;border-top:1px solid var(--line);min-height:28px}
-  #readout b{color:var(--ink);font-weight:600}
-  #settings{background:#141824;border-bottom:1px solid var(--line)}
-  #settings code{background:#0e1017;padding:1px 4px;border-radius:3px}
-  footer{padding:14px 12px 28px;color:var(--dim);font-size:11px;border-top:1px solid var(--line)}
-  footer a{color:var(--accent)}
-  #bar{height:3px;background:#0e1017;position:sticky;top:0;z-index:4}
+  #status{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
+  #status.err{color:var(--err)}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border:1px solid var(--line);
+        border-radius:999px;font-size:11px;color:var(--dim);background:var(--panel2)}
+  .chip b{color:var(--ink);font-weight:600}
+  .chip.live{border-color:#2f5d3a;color:var(--ok)}
+  .chip.none{border-color:#5d3a2f;color:var(--warn)}
+
+  #bar{height:2px;background:#0b0d13;position:sticky;top:33px;z-index:5}
   #barfill{height:100%;width:0;background:var(--accent);transition:width .3s linear}
-  #bar.indet #barfill{width:35%;animation:slide 1.4s ease-in-out infinite}
-  @keyframes slide{0%{margin-left:-35%}100%{margin-left:100%}}
+  #bar.indet #barfill{width:32%;animation:slide 1.4s ease-in-out infinite}
+  @keyframes slide{0%{margin-left:-32%}100%{margin-left:100%}}
+
+  /* ------------------------------------------------------------- layout */
+  main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:9px;padding:9px;align-items:start}
+  @media (max-width:1100px){main{grid-template-columns:minmax(0,1fr)}}
+  .col{display:flex;flex-direction:column;gap:9px;min-width:0}
+
+  .pane{background:var(--panel);border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .pane>h2{margin:0;padding:4px 9px;font-size:10.5px;letter-spacing:.09em;
+        text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--line2);
+        display:flex;gap:9px;align-items:center;background:var(--panel2)}
+  .pane>h2 .sub{text-transform:none;letter-spacing:0;font-size:11px;color:var(--dim2)}
+  canvas{display:block;width:100%}
+  #wave{height:118px;cursor:crosshair}
+  #overview{height:30px;cursor:pointer;border-bottom:1px solid var(--line2)}
+  #intens{height:66px;cursor:crosshair}
+  #spec{height:330px;cursor:crosshair}
+  #tiers{height:132px;cursor:pointer}
+  .legend{display:flex;gap:9px;font-size:10.5px;color:var(--dim);margin-left:auto;align-items:center}
+  .legend i{font-style:normal}
+  .swatch{display:inline-block;width:8px;height:8px;border-radius:2px;vertical-align:-1px;margin-right:3px}
+
+  .row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:5px 9px;
+       border-top:1px solid var(--line2)}
+  .row.tight{padding:4px 9px}
+  label{color:var(--dim);font-size:11px}
+  .hint{color:var(--dim);font-size:11px}
+  .pad{padding:6px 9px}
+
+  /* readout: a fixed table so numbers never jump as you move the cursor */
+  #readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));
+           gap:0;border-top:1px solid var(--line2);background:var(--panel2)}
+  #readout div{padding:4px 9px;border-right:1px solid var(--line2)}
+  #readout div:last-child{border-right:0}
+  #readout k{display:block;color:var(--dim2);font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+  #readout v{display:block;font-family:var(--mono);font-size:12.5px}
+
+  /* ------------------------------------------------------- side panels */
+  .track{border-top:1px solid var(--line2);padding:6px 9px}
+  .track:first-of-type{border-top:0}
+  .track .top{display:flex;align-items:center;gap:6px}
+  .track .name{font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+  .track .meta{font-size:11px;color:var(--dim2);margin-top:3px;font-family:var(--mono)}
+  .track select{flex:1;min-width:0}
+  .state{font-size:10.5px;padding:1px 6px;border-radius:999px;border:1px solid var(--line);
+         color:var(--dim);white-space:nowrap}
+  .state[data-s="running"],.state[data-s="partial"]{color:var(--accent);border-color:#2b4570}
+  .state[data-s="done"]{color:var(--ok);border-color:#2f5d3a}
+  .state[data-s="queued"]{color:var(--warn);border-color:#5d4a2f}
+  .state[data-s="failed"]{color:var(--err);border-color:#5d2f2f}
+  .spin{display:inline-block;width:9px;height:9px;border-radius:50%;
+        border:1.5px solid currentColor;border-top-color:transparent;
+        animation:rot .8s linear infinite;vertical-align:-1px;margin-right:4px}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .dots::after{content:'';animation:dots 1.2s steps(4,end) infinite}
+  @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+
+  .params{display:grid;grid-template-columns:1fr auto;gap:3px 7px;padding:6px 9px;align-items:center}
+  .params .head{grid-column:1/-1;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+                color:var(--dim2);margin-top:5px;border-bottom:1px solid var(--line2);padding-bottom:2px}
+  .params .head:first-child{margin-top:0}
+  .params label{font-size:11px}
+  .params input,.params select{width:86px;text-align:right;padding:2px 5px;font-family:var(--mono);font-size:11.5px}
+  .params select{text-align:left}
+  pre.cmd{margin:0;padding:6px 9px;background:#090b10;border-top:1px solid var(--line2);
+      font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:pre-wrap;word-break:break-word}
+  pre.cmd b{color:var(--ink);font-weight:400}
+
+  table.seg{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+  table.seg th{position:sticky;top:0;background:var(--panel2);color:var(--dim2);font-weight:500;
+       text-align:right;padding:3px 6px;border-bottom:1px solid var(--line);font-size:10px;
+       letter-spacing:.05em;text-transform:uppercase}
+  table.seg th.l,table.seg td.l{text-align:left}
+  table.seg td{padding:2px 6px;text-align:right;border-bottom:1px solid var(--line2);color:var(--dim)}
+  table.seg td.l{color:var(--ink)}
+  table.seg tr:hover td{background:#1b2030;cursor:pointer}
+  table.seg tr.sel td{background:#22304a}
+  .scroll{max-height:260px;overflow:auto}
+  #transcript{padding:7px 9px;max-height:200px;overflow:auto;font-size:12px;line-height:1.55}
+  #transcript .cue{margin-bottom:5px}
+  #transcript .t{color:var(--dim2);font-family:var(--mono);font-size:10px;margin-right:5px}
+  #transcript .ipa{color:var(--f2);display:block;margin-left:2px}
+
+  /* --------------------------------------------------------- settings */
+  #settings{background:#141824;border-bottom:1px solid var(--line)}
+  #settings code{background:#0b0d13;padding:1px 4px;border-radius:3px;font-family:var(--mono)}
+  #settings .grid{display:grid;grid-template-columns:auto 1fr;gap:6px 9px;padding:8px 10px;align-items:center}
+  .modehdr{display:flex;gap:14px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line2)}
+  .modehdr label{display:flex;gap:5px;align-items:center;color:var(--ink);font-size:12px;cursor:pointer}
+  fieldset{border:1px solid var(--line2);border-radius:6px;margin:8px 10px;padding:0}
+  fieldset[disabled]{opacity:.45}
+  legend{font-size:10.5px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase;padding:0 5px}
+
+  footer{padding:12px 10px 26px;color:var(--dim2);font-size:11px;border-top:1px solid var(--line)}
+  footer a{color:var(--accent)}
 </style>
 </head>
 <body>
 <header>
   <input type="file" id="file" accept="audio/*,video/*">
-  <input id="model" list="modellist" size="14" placeholder="model" value="whisper"
-         title="ASR model id, as your endpoint names it">
-  <datalist id="modellist"></datalist>
-  <select id="asrsize" title="Whisper size (ipa / whisper only)">
-    <option value="">size: default</option>
-    <option>tiny</option><option>base</option><option>small</option>
-    <option selected>medium</option><option>large-v3</option><option>large-v3-turbo</option>
-  </select>
-  <input id="lang" size="6" placeholder="lang" title="ISO 639-1, or 639-3 for mms/owsm">
-  <button id="run" class="primary" disabled>Run ASR</button>
+  <button id="run" class="primary" disabled>Run recognition</button>
   <button id="stop" hidden>■ Stop</button>
-  <button id="gear" title="ASR endpoint settings">⚙</button>
+  <button id="gear" title="Recogniser connection">⚙ Connection</button>
+  <span id="connchip" class="chip none">no recogniser</span>
   <span class="sp"></span>
   <span id="status">loading Praat…</span>
 </header>
@@ -84,65 +164,219 @@
 <div id="bar" hidden><div id="barfill"></div></div>
 
 <div id="settings" hidden>
-  <div class="row">
-    <label>ASR endpoint</label>
-    <input id="asrbase" size="34" placeholder="(same origin) — or http://host:port of your ASR server">
-    <button id="asrtest">Test</button>
+  <div class="modehdr">
+    <label><input type="radio" name="mode" value="broker" id="modeBroker"> Server-side providers</label>
+    <label><input type="radio" name="mode" value="direct" id="modeDirect"> Direct endpoint</label>
     <span class="sp"></span>
-    <button id="gearclose">Close</button>
+    <button id="gearclose" class="tiny">Close</button>
   </div>
-  <div class="hint">
-    Any server exposing <code>POST {base}/v1/audio/transcriptions</code> (OpenAI shape).
-    Leave blank to use the server that is hosting this page. A cross-origin endpoint must send
-    CORS headers. Optional: if the endpoint also exposes <code>{control}/progress</code> and
-    <code>{control}/cancel</code> you get a live progress bar and a Stop button.
-  </div>
-  <div class="row">
-    <label>control path</label>
-    <input id="ctrlbase" size="34" placeholder="/upstream/asr">
-    <span id="asrstate" class="hint" style="padding:0">not checked</span>
-  </div>
+
+  <fieldset id="fsBroker">
+    <legend>Providers configured on the machine serving this page</legend>
+    <div class="grid">
+      <label>provider</label>
+      <div class="row tight" style="padding:0;border:0">
+        <select id="provider" style="min-width:260px"></select>
+        <button id="providerRefresh" class="tiny">Reload</button>
+        <span id="providerNote" class="hint"></span>
+      </div>
+    </div>
+    <div class="hint pad">
+      Providers come from <code>providers.json</code> beside <code>serve.py</code>. API keys stay
+      on that machine: this page is told only whether a key is present. Requests are proxied, so
+      there is no CORS to configure and no key in the browser. Copy
+      <code>providers.example.json</code> to start.
+    </div>
+  </fieldset>
+
+  <fieldset id="fsDirect">
+    <legend>Talk to one endpoint directly from the browser</legend>
+    <div class="grid">
+      <label>base URL</label>
+      <div class="row tight" style="padding:0;border:0">
+        <input id="asrbase" size="36" placeholder="(same origin) — or http://host:port">
+        <button id="asrtest" class="tiny">Test</button>
+        <span id="asrstate" class="hint">not checked</span>
+      </div>
+      <label>control path</label>
+      <input id="ctrlbase" size="36" placeholder="/upstream/asr" style="max-width:320px">
+    </div>
+    <div class="hint pad">
+      Anything exposing <code>POST {base}/v1/audio/transcriptions</code> in the OpenAI shape.
+      A cross-origin endpoint must send <code>Access-Control-Allow-Origin</code>, which is the
+      usual reason this mode fails where the proxied one works. If the endpoint also serves
+      <code>{control}/progress</code>, <code>{control}/partial</code> and
+      <code>{control}/cancel</code>, you get live progress, tiers that fill while the job runs,
+      and a working Stop button.
+    </div>
+  </fieldset>
 </div>
 
 <main>
+<div class="col">
+
   <div class="pane">
-    <h2>Waveform <span class="hint" style="padding:0">drag to set the analysis window · click to seek</span></h2>
+    <h2>Signal <span class="sub" id="fileinfo">no file</span>
+      <span class="legend"><i>drag to set the analysis window · click to seek</i></span>
+    </h2>
+    <canvas id="overview"></canvas>
     <canvas id="wave"></canvas>
-    <div class="row">
-      <button id="play">▶ Play</button>
-      <button id="playsel">▶ Window</button>
-      <label>window</label><span id="wininfo" class="hint" style="padding:0">—</span>
+    <div class="row tight">
+      <button id="play" class="tiny">▶ File</button>
+      <button id="playwin" class="tiny">▶ Window</button>
+      <button id="playsel" class="tiny" disabled>▶ Selection</button>
+      <button id="zoomSel" class="tiny" disabled>zoom to selection</button>
+      <button id="zoomOut" class="tiny">−</button>
+      <button id="zoomIn" class="tiny">+</button>
+      <button id="zoomAll" class="tiny">all</button>
       <span class="sp"></span>
-      <label>max Hz</label><input id="maxhz" size="5" value="5000">
-      <label>dyn dB</label><input id="dynrange" size="4" value="60">
-      <button id="reanalyse">Re-analyse</button>
+      <span id="wininfo" class="hint num">—</span>
     </div>
+    <div class="row tight" id="selrow" hidden><span id="selinfo" class="hint num">—</span></div>
+  </div>
+
+  <div class="pane" id="intensPane" hidden>
+    <h2>Intensity <span class="sub" id="intensinfo">dB SPL, Praat default weighting</span></h2>
+    <canvas id="intens"></canvas>
   </div>
 
   <div class="pane">
     <h2>Spectrogram
       <span class="legend">
-        <span style="color:var(--f0)"><b>●</b> f0</span>
-        <span style="color:var(--f1)"><b>●</b> F1</span>
-        <span style="color:var(--f2)"><b>●</b> F2</span>
-        <span style="color:var(--f3)"><b>●</b> F3</span>
+        <span style="color:var(--f0)"><i class="swatch" style="background:var(--f0)"></i>f0</span>
+        <span style="color:var(--f1)"><i class="swatch" style="background:var(--f1)"></i>F1</span>
+        <span style="color:var(--f2)"><i class="swatch" style="background:var(--f2)"></i>F2</span>
+        <span style="color:var(--f3)"><i class="swatch" style="background:var(--f3)"></i>F3</span>
+        <label style="margin-left:6px"><input type="checkbox" id="showF0" checked> f0</label>
+        <label><input type="checkbox" id="showFmt" checked> formants</label>
       </span>
     </h2>
     <canvas id="spec"></canvas>
-    <div id="readout">—</div>
+    <div id="readout">
+      <div><k>time</k><v id="rT">—</v></div>
+      <div><k>cursor Hz</k><v id="rHz">—</v></div>
+      <div><k>f0</k><v id="rF0">—</v></div>
+      <div><k>F1</k><v id="rF1">—</v></div>
+      <div><k>F2</k><v id="rF2">—</v></div>
+      <div><k>F3</k><v id="rF3">—</v></div>
+      <div><k>intensity</k><v id="rInt">—</v></div>
+      <div><k>label</k><v id="rLab">—</v></div>
+    </div>
   </div>
 
   <div class="pane">
-    <h2>Tiers <span class="hint" style="padding:0">words · phones, from the ASR alignment</span></h2>
+    <h2>Tiers <span class="sub" id="tierinfo">no annotation yet</span></h2>
     <canvas id="tiers"></canvas>
-    <div class="row">
+    <div class="row tight">
       <button id="dlTextGrid" disabled>⬇ TextGrid</button>
       <button id="dlSrt" disabled>⬇ SRT</button>
       <button id="dlAss" disabled>⬇ ASS</button>
+      <button id="dlTsv" disabled>⬇ TSV</button>
       <span class="sp"></span>
-      <span id="tierinfo" class="hint" style="padding:0">no alignment yet</span>
+      <label title="Write the model that produced each tier into the tier name, so the provenance survives the export.">
+        <input type="checkbox" id="nameTiers"> name tiers by model</label>
     </div>
   </div>
+</div>
+
+<div class="col">
+
+  <div class="pane">
+    <h2>Recognition <span class="sub">one tier per model, run in order</span></h2>
+    <div class="track" data-track="word">
+      <div class="top">
+        <span class="name">Word tier</span>
+        <span class="sp"></span>
+        <span class="state" id="stWord" data-s="empty">no model</span>
+        <button class="tiny" id="reWord" title="Run this tier only">⟲</button>
+      </div>
+      <div class="row tight" style="padding:5px 0 0;border:0">
+        <select id="mdWord"><option value="">(none)</option></select>
+      </div>
+      <div class="meta" id="mtWord">orthographic transcription</div>
+    </div>
+    <div class="track" data-track="phone">
+      <div class="top">
+        <span class="name">Phone tier</span>
+        <span class="sp"></span>
+        <span class="state" id="stPhone" data-s="empty">no model</span>
+        <button class="tiny" id="rePhone" title="Run this tier only">⟲</button>
+      </div>
+      <div class="row tight" style="padding:5px 0 0;border:0">
+        <select id="mdPhone"><option value="">(none)</option></select>
+      </div>
+      <div class="meta" id="mtPhone">IPA read off the acoustics, with CTC spike times</div>
+    </div>
+    <div class="row tight">
+      <label>language</label><input id="lang" size="5" class="num" placeholder="auto"
+        title="ISO 639-1 for whisper, 639-3 for mms/owsm. Blank = let the model decide.">
+      <label>whisper size</label>
+      <select id="asrsize" class="num">
+        <option value="">default</option>
+        <option>tiny</option><option>base</option><option>small</option>
+        <option selected>medium</option><option>large-v3</option><option>large-v3-turbo</option>
+      </select>
+    </div>
+    <div class="hint pad" id="planNote" style="border-top:1px solid var(--line2)">
+      Choosing the same model for both tiers runs it once.
+    </div>
+  </div>
+
+  <div class="pane">
+    <h2>Analysis <span class="sub">Praat arguments, as typed</span>
+      <span class="sp"></span>
+      <button id="reanalyse" class="tiny">Re-analyse</button>
+    </h2>
+    <div class="params">
+      <div class="head">Spectrogram</div>
+      <label for="pSpecWin">window length (s)</label><input id="pSpecWin" class="num" value="0.005">
+      <label for="pMaxHz">max frequency (Hz)</label><input id="pMaxHz" class="num" value="5000">
+      <label for="pSpecStep">time step (s)</label><input id="pSpecStep" class="num" value="0.002">
+      <label for="pSpecFStep">frequency step (Hz)</label><input id="pSpecFStep" class="num" value="20">
+      <label for="pSpecShape">window shape</label>
+      <select id="pSpecShape" class="num">
+        <option>Gaussian</option><option>Hanning</option><option>Hamming</option>
+        <option>Bartlett</option><option>Welch</option><option>square</option>
+      </select>
+      <label for="pDyn">dynamic range (dB)</label><input id="pDyn" class="num" value="60">
+
+      <div class="head">Pitch (autocorrelation)</div>
+      <label for="pPitchStep">time step (s)</label><input id="pPitchStep" class="num" value="0.0">
+      <label for="pPitchFloor">floor (Hz)</label><input id="pPitchFloor" class="num" value="75">
+      <label for="pPitchCeil">ceiling (Hz)</label><input id="pPitchCeil" class="num" value="600">
+
+      <div class="head">Formants (Burg)</div>
+      <label for="pFmtStep">time step (s)</label><input id="pFmtStep" class="num" value="0.0">
+      <label for="pFmtN">max number</label><input id="pFmtN" class="num" value="5">
+      <label for="pFmtCeil">max formant (Hz)</label><input id="pFmtCeil" class="num" value="5500">
+      <label for="pFmtWin">window length (s)</label><input id="pFmtWin" class="num" value="0.025">
+      <label for="pFmtPre">pre-emphasis from (Hz)</label><input id="pFmtPre" class="num" value="50">
+    </div>
+    <pre class="cmd" id="cmdEcho"></pre>
+  </div>
+
+  <div class="pane">
+    <h2>Segments
+      <select id="segWhich" class="tiny num" style="padding:1px 5px">
+        <option value="phone">phones</option><option value="word">words</option>
+      </select>
+      <span class="sub" id="segCount">—</span>
+      <span class="sp"></span>
+      <button id="segCopy" class="tiny">copy</button>
+    </h2>
+    <div class="scroll">
+      <table class="seg" id="segTable">
+        <thead><tr><th>#</th><th class="l">label</th><th>start</th><th>end</th><th>dur ms</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="pane">
+    <h2>Transcript <span class="sub" id="transcriptNote">fills as the recogniser reports</span></h2>
+    <div id="transcript" class="hint">nothing yet</div>
+  </div>
+</div>
 </main>
 
 <footer>
@@ -151,8 +385,8 @@
   (Paul Boersma &amp; David Weenink), compiled to WebAssembly as
   <a href="https://www.npmjs.com/package/praat-wasm" target="_blank" rel="noopener">praat-wasm</a>
   by reynoldsnlp. Praat and praat-wasm are GPL-3.0-or-later, and so is this page.
-  Audio never leaves your machine for the analysis; only an explicit
-  <em>Run ASR</em> uploads it, and only to the endpoint you configure.
+  The audio is decoded and analysed inside this browser; only an explicit run of a recogniser
+  uploads it, and only to the endpoint or provider you chose.
 </footer>
 
 <script type="module">
@@ -167,45 +401,63 @@ const $ = id => document.getElementById(id);
    updating with no trace. Make those loud. */
 addEventListener('unhandledrejection', e =>
   console.error('unhandled rejection:', e.reason?.message || e.reason));
-const status = (msg, err=false) => { $('status').textContent = msg; $('status').classList.toggle('err', err); };
+const status = (msg, err = false) => {
+  $('status').textContent = msg;
+  $('status').classList.toggle('err', err);
+};
+const num = (id, dflt) => { const v = Number($(id).value); return isFinite(v) ? v : dflt; };
+const f2 = v => (isFinite(v) ? v.toFixed(2) : '—');
+const f3 = v => (isFinite(v) ? v.toFixed(3) : '—');
+const hz = v => (isFinite(v) && v > 0 ? Math.round(v) + ' Hz' : '—');
 
 /* --------------------------------------------------------------- config */
-/* Defaults assume the page is served by something that ALSO answers
-   /v1/audio/transcriptions — which is true when llama-swap serves it at
-   /upstream/praat/. Standalone, same-origin has no ASR, so the panel is where
-   you point it somewhere else. Everything except ASR works with no backend. */
+/* The page is static: every choice lives here, in localStorage, or in the
+   query string, so a deployment is a directory of files and a person can share
+   a configured link. */
 const CFG = {
-  asrBase: '',            // '' = same origin
+  mode: 'auto',              // auto | broker | direct
+  provider: '',
+  asrBase: '',               // '' = same origin
   ctrlBase: '/upstream/asr',
+  wordModel: '', phoneModel: '',
+  lang: '', size: 'medium', nameTiers: false,
 };
 const CFG_KEY = 'praat-web.config';
 try { Object.assign(CFG, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch {}
-{ const q = new URLSearchParams(location.search);
-  if (q.has('asr')) CFG.asrBase = q.get('asr');
-  if (q.has('ctrl')) CFG.ctrlBase = q.get('ctrl'); }
+{
+  const q = new URLSearchParams(location.search);
+  if (q.has('asr')) { CFG.asrBase = q.get('asr'); CFG.mode = 'direct'; }
+  if (q.has('ctrl')) CFG.ctrlBase = q.get('ctrl');
+  if (q.has('provider')) { CFG.provider = q.get('provider'); CFG.mode = 'broker'; }
+  if (q.has('words')) CFG.wordModel = q.get('words');
+  if (q.has('phones')) CFG.phoneModel = q.get('phones');
+}
 const saveCfg = () => { try { localStorage.setItem(CFG_KEY, JSON.stringify(CFG)); } catch {} };
-const asrUrl  = path => (CFG.asrBase || '').replace(/\/$/, '') + path;
-const ctrlUrl = path => CFG.ctrlBase ? asrUrl(CFG.ctrlBase.replace(/\/$/, '') + path) : null;
 
-/* Set false the first time a control-endpoint poll fails, so a plain OpenAI
-   server does not get hammered with 404s for endpoints only this stack has. */
-let controlOk = true;
+/* Where this page is mounted. llama-swap serves it under /upstream/praat/, and
+   the broker lives beside it, so the API path has to be derived rather than
+   assumed to be at the root. */
+let PAGE_BASE = location.pathname;
+if (/\.html?$/i.test(PAGE_BASE)) PAGE_BASE = PAGE_BASE.replace(/[^/]*$/, '');
+else if (!PAGE_BASE.endsWith('/')) PAGE_BASE += '/';
+const apiUrl = path => PAGE_BASE + 'api' + path;
 
 /* ---------------------------------------------------------------- state */
-let poller = null;
-let awaitingOwnJob = false;   // true from clicking Run until our POST settles
-let uiBusy = false;           // the backend is running a job (possibly not ours)
-
+function newTrack(role, label) {
+  return { role, label, model: '', provider: '', state: 'empty', note: '',
+           cues: [], items: [], source: '', fromJob: null };
+}
 const S = {
-  praat: null,        // praat-wasm worker instance
-  sound: null,        // Praat Sound for the whole file
-  audio: null,        // decoded AudioBuffer (playback + waveform)
-  name: 'audio',
-  win: [0, 0],        // [start, end] of the analysis window, seconds
-  analysis: null,     // {img, pitch, formants, t0, t1, maxHz}
-  cues: [],           // from the ASR
-  src: null,          // current AudioBufferSourceNode
-  ctx: null,
+  praat: null, sound: null, audio: null, ctx: null, src: null,
+  name: 'audio', dur: 0,
+  win: [0, 0],          // visible / analysed window
+  sel: null,            // [a, b] selection inside the window, or null
+  cursor: null,         // last probed time
+  analysis: null,       // {spec, pitch, formants, intensity, t0, t1, params}
+  tracks: { word: newTrack('words', 'words'), phone: newTrack('phones', 'phones') },
+  transcript: [],       // cues for the text panel, whichever model produced them
+  queue: [], running: null,
+  lastReadout: {},
 };
 
 /* praat-wasm is Praat itself compiled to WASM (GPL-3.0). It runs in a Worker
@@ -221,7 +473,7 @@ const praatReady = (async () => {
       new URL('./vendor/js/worker.mjs', location.href),
       new URL('./vendor/dist/praat.wasm', location.href),
     );
-    if (!uiBusy) status('Praat ready — choose an audio file');
+    if (!S.running) status('Praat ready — choose an audio file');
   } catch (e) {
     status('Praat failed to load: ' + e.message, true);
   }
@@ -251,6 +503,15 @@ async function dumpMatrix(obj, cmd, ...args) {
   return parseMatrix(new TextDecoder().decode(bytes));
 }
 
+/* Sample a matrix row at an absolute time, given the window it was cut from. */
+function sampleAt(m, t, t0) {
+  if (!m || !m.rows[0]) return NaN;
+  const i = Math.round((t - t0 - m.x1) / m.dx);
+  if (i < 0 || i >= m.nx) return NaN;
+  const v = m.rows[0][i];
+  return v > 0 ? v : NaN;
+}
+
 /* ------------------------------------------------------------ file load */
 $('file').addEventListener('change', async ev => {
   const f = ev.target.files[0];
@@ -267,6 +528,7 @@ $('file').addEventListener('change', async ev => {
   } catch {
     status('browser cannot decode that file', true); return;
   }
+  S.dur = S.audio.duration;
 
   /* Hand Praat a plain 16-bit WAV built from the decoded samples rather than
      the original container. readAudio only knows WAV/AIFF/FLAC/MP3/OGG, but
@@ -277,15 +539,22 @@ $('file').addEventListener('change', async ev => {
   S.sound = await S.praat.readAudio(wav.buffer, S.name + '.wav');
   if (!S.sound) { status('Praat could not read the audio', true); return; }
 
-  S.cues = [];
-  S.win = [0, Math.min(10, S.audio.duration)];
+  for (const k of ['word', 'phone']) {
+    const t = S.tracks[k];
+    Object.assign(t, { cues: [], items: [], state: t.model ? 'ready' : 'empty', note: '', source: '' });
+  }
+  S.transcript = [];
+  S.sel = null;
+  S.win = [0, Math.min(10, S.dur)];
+  $('fileinfo').textContent =
+    `${f.name} · ${f2(S.dur)} s · ${S.audio.sampleRate} Hz · ` +
+    `${S.audio.numberOfChannels} ch · ${S.audio.length.toLocaleString()} samples`;
   $('run').disabled = false;
-  // TextGrid works with no ASR at all: empty tiers spanning the file is exactly
-  // how you start a hand annotation in Praat.
+  // TextGrid works with no recogniser at all: empty tiers spanning the file is
+  // exactly how you start a hand annotation in Praat.
   $('dlTextGrid').disabled = false;
-  for (const b of ['dlSrt','dlAss']) $(b).disabled = true;
-  $('tierinfo').textContent = 'no alignment yet — export an empty TextGrid, or run ASR';
-  drawWave(); drawTiers();
+  renderPlan(); renderSegments(); renderTranscript();
+  drawAll();
   await analyse();
 });
 
@@ -312,12 +581,51 @@ function encodeWav(buf) {
 }
 
 /* -------------------------------------------------------------- analysis */
+/* Every argument Praat is given is on screen and editable. The defaults are
+   Praat's own; the point of exposing them is that a spectrogram is not one
+   picture but a family of them, and which member you are looking at decides
+   what you can claim from it. The command echo below the fields is literal, so
+   it can be pasted into a Praat script and produce the same objects. */
+function params() {
+  return {
+    specWin: num('pSpecWin', 0.005), maxHz: num('pMaxHz', 5000),
+    specStep: num('pSpecStep', 0.002), specFStep: num('pSpecFStep', 20),
+    shape: $('pSpecShape').value, dyn: Math.max(10, num('pDyn', 60)),
+    pitchStep: num('pPitchStep', 0), pitchFloor: num('pPitchFloor', 75),
+    pitchCeil: num('pPitchCeil', 600),
+    fmtStep: num('pFmtStep', 0), fmtN: num('pFmtN', 5), fmtCeil: num('pFmtCeil', 5500),
+    fmtWin: num('pFmtWin', 0.025), fmtPre: num('pFmtPre', 50),
+  };
+}
+
+function commandList(p, t0, t1) {
+  return [
+    `Extract part... ${f3(t0)} ${f3(t1)} rectangular 1 no`,
+    `To Spectrogram... ${p.specWin} ${p.maxHz} ${p.specStep} ${p.specFStep} ${p.shape}`,
+    `To Pitch... ${p.pitchStep} ${p.pitchFloor} ${p.pitchCeil}`,
+    `To Formant (burg)... ${p.fmtStep} ${p.fmtN} ${p.fmtCeil} ${p.fmtWin} ${p.fmtPre}`,
+    `To Intensity... ${p.pitchFloor} ${p.pitchStep} yes`,
+  ];
+}
+
+function echoCommands() {
+  const p = params(), [t0, t1] = S.win;
+  $('cmdEcho').textContent = commandList(p, t0, t1).join('\n');
+}
+for (const id of ['pSpecWin','pMaxHz','pSpecStep','pSpecFStep','pSpecShape','pDyn',
+                  'pPitchStep','pPitchFloor','pPitchCeil','pFmtStep','pFmtN','pFmtCeil',
+                  'pFmtWin','pFmtPre'])
+  $(id).addEventListener('change', echoCommands);
+echoCommands();
+
+let intensityWorks = true;   // set false the first time Praat refuses the command
+
 async function analyse() {
   if (!S.sound) return;
   const [t0, t1] = S.win;
-  const maxHz = Math.max(500, Number($('maxhz').value) || 5000);
-  const dyn = Math.max(20, Number($('dynrange').value) || 60);
-  status(`analysing ${(t1 - t0).toFixed(2)} s …`);
+  const p = params();
+  echoCommands();
+  status(`analysing ${f2(t1 - t0)} s …`);
   const started = performance.now();
   try {
     /* Window the sound first. Cost is linear in duration (~270 ms per second
@@ -325,431 +633,859 @@ async function analyse() {
        Praat itself only ever analyses the visible window for the same reason. */
     const part = await S.praat.call(S.sound, 'Extract part...', t0, t1, 'rectangular', 1, 'no');
 
-    const specObj = await S.praat.call(part, 'To Spectrogram...', 0.005, maxHz, 0.002, 20, 'Gaussian');
+    const specObj = await S.praat.call(part, 'To Spectrogram...',
+      p.specWin, p.maxHz, p.specStep, p.specFStep, p.shape);
     const spec = await dumpMatrix(specObj, 'To Matrix');
 
-    const pitchObj = await S.praat.call(part, 'To Pitch...', 0.0, 75, 600);
+    const pitchObj = await S.praat.call(part, 'To Pitch...', p.pitchStep, p.pitchFloor, p.pitchCeil);
     const pitch = await dumpMatrix(pitchObj, 'To Matrix');
 
-    const formObj = await S.praat.call(part, 'To Formant (burg)...', 0, 5, maxHz + 500, 0.025, 50);
+    const formObj = await S.praat.call(part, 'To Formant (burg)...',
+      p.fmtStep, p.fmtN, p.fmtCeil, p.fmtWin, p.fmtPre);
     const formants = [];
     for (const n of [1, 2, 3]) formants.push(await dumpMatrix(formObj, 'To Matrix...', n));
 
-    S.analysis = { spec, pitch, formants, t0, t1, maxHz, dyn };
-    drawSpec();
-    status(`${(t1 - t0).toFixed(2)} s analysed in ${((performance.now() - started) / 1000).toFixed(1)} s`);
+    /* Intensity has no documented matrix export in this build; Vector's
+       "Down to Matrix" works, but rather than assume it, try it once and drop
+       the pane for good if Praat refuses. A missing curve is better than a
+       failed analysis. */
+    let intensity = null;
+    if (intensityWorks) {
+      try {
+        const intObj = await S.praat.call(part, 'To Intensity...', p.pitchFloor, p.pitchStep, 'yes');
+        intensity = await dumpMatrix(intObj, 'Down to Matrix');
+      } catch (e) {
+        try {
+          const intObj = await S.praat.call(part, 'To Intensity...', p.pitchFloor, p.pitchStep, 'yes');
+          intensity = await dumpMatrix(intObj, 'To Matrix');
+        } catch (e2) {
+          intensityWorks = false;
+          console.warn('intensity unavailable in this praat-wasm build:', e2.message || e2);
+        }
+      }
+    }
+    $('intensPane').hidden = !intensity;
+
+    S.analysis = { spec, pitch, formants, intensity, t0, t1, p };
+    drawAll();
+    status(`${f2(t1 - t0)} s analysed in ${f2((performance.now() - started) / 1000)} s`);
   } catch (e) {
     status('analysis failed: ' + (e.message || e), true);
   }
 }
-
 $('reanalyse').addEventListener('click', analyse);
 
 /* --------------------------------------------------------------- drawing */
+/* One margin box for every pane, so the time axis of the waveform, the
+   spectrogram and the tiers line up to the pixel. Reading a boundary off a
+   spectrogram against a tier drawn on a different scale is exactly the kind of
+   small dishonesty this tool should not introduce. */
+const PAD = { l: 56, r: 46, t: 6, b: 17 };
+
 function fit(cv) {
   const dpr = devicePixelRatio || 1;
   const w = cv.clientWidth, h = cv.clientHeight;
-  if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  if (!w || !h) return null;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  }
   const g = cv.getContext('2d');
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, w, h);
-  return { g, w, h };
+  return { g, w, h, x0: PAD.l, x1: w - PAD.r, y0: PAD.t, y1: h - PAD.b,
+           iw: w - PAD.l - PAD.r, ih: h - PAD.t - PAD.b };
+}
+
+function niceStep(span, target) {
+  const raw = span / Math.max(1, target);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / mag;
+  return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * mag;
+}
+
+function tlabel(t, step) {
+  if (step >= 1) return t.toFixed(0) + ' s';
+  if (step >= 0.1) return t.toFixed(1);
+  if (step >= 0.01) return t.toFixed(2);
+  return (t * 1000).toFixed(0) + ' ms';
+}
+
+function drawTimeAxis(F, t0, t1) {
+  const { g, x0, x1, y1, h } = F;
+  const span = t1 - t0;
+  const step = niceStep(span, Math.max(3, Math.round(F.iw / 90)));
+  g.strokeStyle = '#2a2f3d'; g.fillStyle = '#646c80';
+  g.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  g.beginPath();
+  for (let t = Math.ceil(t0 / step) * step; t <= t1 + 1e-9; t += step) {
+    const x = x0 + (t - t0) / span * F.iw;
+    g.moveTo(x + .5, y1); g.lineTo(x + .5, y1 + 4);
+    g.fillText(tlabel(t, step), x, y1 + 5);
+  }
+  g.moveTo(x0, y1 + .5); g.lineTo(x1, y1 + .5);
+  g.stroke();
+}
+
+function drawVAxis(F, lo, hi, unit, colour, right = false) {
+  const { g, x0, x1, y0, y1, ih } = F;
+  const span = hi - lo;
+  const step = niceStep(span, Math.max(2, Math.round(ih / 42)));
+  g.strokeStyle = '#242a38'; g.fillStyle = colour;
+  g.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  g.textAlign = right ? 'left' : 'right'; g.textBaseline = 'middle';
+  g.beginPath();
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) {
+    const y = y1 - (v - lo) / span * ih;
+    if (y < y0 - 1 || y > y1 + 1) continue;
+    g.moveTo(x0, y + .5); g.lineTo(x1, y + .5);
+    g.fillText(String(Math.round(v * 100) / 100), right ? x1 + 5 : x0 - 5, y);
+  }
+  g.stroke();
+  g.save();
+  g.translate(right ? x1 + 40 : 11, (y0 + y1) / 2);
+  g.rotate(right ? Math.PI / 2 : -Math.PI / 2);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(unit, 0, 0);
+  g.restore();
+}
+
+function shadeSelection(F, t0, t1) {
+  if (!S.sel) return;
+  const { g, x0, y0, y1, iw } = F;
+  const a = Math.max(t0, S.sel[0]), b = Math.min(t1, S.sel[1]);
+  if (b <= a) return;
+  const xa = x0 + (a - t0) / (t1 - t0) * iw, xb = x0 + (b - t0) / (t1 - t0) * iw;
+  g.fillStyle = 'rgba(110,168,254,0.14)';
+  g.fillRect(xa, y0, xb - xa, y1 - y0);
+  g.strokeStyle = 'rgba(110,168,254,0.55)';
+  g.beginPath();
+  g.moveTo(xa + .5, y0); g.lineTo(xa + .5, y1);
+  g.moveTo(xb - .5, y0); g.lineTo(xb - .5, y1);
+  g.stroke();
+}
+
+function drawCursor(F, t0, t1) {
+  if (S.cursor == null || S.cursor < t0 || S.cursor > t1) return;
+  const { g, x0, y0, y1, iw } = F;
+  const x = x0 + (S.cursor - t0) / (t1 - t0) * iw;
+  g.strokeStyle = 'rgba(231,233,239,0.55)';
+  g.setLineDash([3, 3]);
+  g.beginPath(); g.moveTo(x + .5, y0); g.lineTo(x + .5, y1); g.stroke();
+  g.setLineDash([]);
+}
+
+function drawOverview() {
+  const F = fit($('overview')); if (!F || !S.audio) return;
+  const { g, x0, x1, y0, y1, iw, ih } = F;
+  const d = S.audio.getChannelData(0), n = d.length, mid = (y0 + y1) / 2;
+  g.fillStyle = '#0b0d13'; g.fillRect(x0, y0, iw, ih);
+  g.strokeStyle = '#39415a'; g.beginPath();
+  for (let x = 0; x < iw; x++) {
+    const a = Math.floor(x / iw * n), b = Math.max(a + 1, Math.floor((x + 1) / iw * n));
+    let lo = 1, hi = -1;
+    const stride = Math.max(1, ((b - a) / 200) | 0);
+    for (let i = a; i < b; i += stride) { const v = d[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+    g.moveTo(x0 + x + .5, mid - hi * ih / 2); g.lineTo(x0 + x + .5, mid - lo * ih / 2);
+  }
+  g.stroke();
+  const wa = x0 + S.win[0] / S.dur * iw, wb = x0 + S.win[1] / S.dur * iw;
+  g.fillStyle = 'rgba(110,168,254,0.18)'; g.fillRect(wa, y0, Math.max(2, wb - wa), ih);
+  g.strokeStyle = '#6ea8fe';
+  g.strokeRect(wa + .5, y0 + .5, Math.max(2, wb - wa) - 1, ih - 1);
+  g.fillStyle = '#646c80';
+  g.font = '9.5px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  g.fillText('file', x0 - 5, (y0 + y1) / 2);
+  g.textAlign = 'left';
+  g.fillText(f2(S.dur) + ' s', x1 + 5, (y0 + y1) / 2);
 }
 
 function drawWave() {
-  const { g, w, h } = fit($('wave'));
-  if (!S.audio) return;
-  const d = S.audio.getChannelData(0), n = d.length, mid = h / 2;
-  g.fillStyle = '#0e1017'; g.fillRect(0, 0, w, h);
-  /* Scale to the file's own peak. Field recordings and FLEURS clips often sit
-     20 dB below full scale, and drawn at absolute amplitude the trace is a flat
-     line — this pane is for *finding* the bit you want, so legibility wins over
-     an honest absolute scale. The dB numbers live in the readout instead. */
+  const F = fit($('wave')); if (!F || !S.audio) return;
+  const { g, x0, y0, y1, iw, ih } = F;
+  const [t0, t1] = S.win, span = t1 - t0;
+  const rate = S.audio.sampleRate, d = S.audio.getChannelData(0);
+  const i0 = Math.max(0, Math.floor(t0 * rate)), i1 = Math.min(d.length, Math.ceil(t1 * rate));
+  const mid = (y0 + y1) / 2;
+
   let peak = 0;
-  for (let i = 0; i < n; i += Math.max(1, (n / 100000) | 0)) { const v = Math.abs(d[i]); if (v > peak) peak = v; }
-  const norm = peak > 1e-4 ? 0.95 / peak : 0.95;
-  g.strokeStyle = '#6f86b8'; g.beginPath();
-  for (let x = 0; x < w; x++) {
-    const a = Math.floor(x / w * n), b = Math.max(a + 1, Math.floor((x + 1) / w * n));
-    let lo = 1, hi = -1;
-    for (let i = a; i < b; i++) { const v = d[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
-    g.moveTo(x + .5, mid - hi * mid * norm); g.lineTo(x + .5, mid - lo * mid * norm);
+  for (let i = i0; i < i1; i += Math.max(1, ((i1 - i0) / 20000) | 0))
+    { const v = Math.abs(d[i]); if (v > peak) peak = v; }
+  const norm = peak > 1e-4 ? 1 / peak : 1;
+  drawVAxis(F, -1, 1, 'rel. amp', '#646c80');
+  shadeSelection(F, t0, t1);
+
+  g.strokeStyle = '#7f8db0'; g.beginPath();
+  const samplesPerPx = (i1 - i0) / iw;
+  if (samplesPerPx < 1.5) {
+    // Few enough samples to draw the actual waveform rather than a min/max band.
+    for (let i = i0; i < i1; i++) {
+      const x = x0 + (i - i0) / (i1 - i0) * iw;
+      const y = mid - d[i] * norm * ih / 2 * 0.95;
+      i === i0 ? g.moveTo(x, y) : g.lineTo(x, y);
+    }
+  } else {
+    for (let x = 0; x < iw; x++) {
+      const a = i0 + Math.floor(x * samplesPerPx), b = Math.min(i1, i0 + Math.floor((x + 1) * samplesPerPx));
+      let lo = 1, hi = -1;
+      for (let i = a; i < b; i++) { const v = d[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+      if (hi < lo) continue;
+      g.moveTo(x0 + x + .5, mid - hi * norm * ih / 2 * 0.95);
+      g.lineTo(x0 + x + .5, mid - lo * norm * ih / 2 * 0.95);
+    }
   }
   g.stroke();
-  g.strokeStyle = '#2a2f3d'; g.beginPath(); g.moveTo(0, mid); g.lineTo(w, mid); g.stroke();
-  // Window shading
-  const dur = S.audio.duration;
-  const x0 = S.win[0] / dur * w, x1 = S.win[1] / dur * w;
-  g.fillStyle = 'rgba(110,168,254,.16)'; g.fillRect(x0, 0, x1 - x0, h);
-  g.strokeStyle = '#6ea8fe'; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(x0, 0); g.lineTo(x0, h); g.moveTo(x1, 0); g.lineTo(x1, h); g.stroke();
-  $('wininfo').textContent = `${S.win[0].toFixed(2)} – ${S.win[1].toFixed(2)} s of ${dur.toFixed(2)} s`;
+  g.strokeStyle = '#2a2f3d';
+  g.beginPath(); g.moveTo(x0, mid + .5); g.lineTo(F.x1, mid + .5); g.stroke();
+  drawCursor(F, t0, t1);
+  drawTimeAxis(F, t0, t1);
+  if (peak > 0) {
+    g.fillStyle = '#646c80'; g.textAlign = 'left'; g.textBaseline = 'top';
+    g.font = '9.5px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    g.fillText('peak ' + (20 * Math.log10(peak)).toFixed(1) + ' dBFS', x0 + 4, y0 + 2);
+  }
+}
+
+function drawIntensity() {
+  const A = S.analysis;
+  if (!A || !A.intensity) return;
+  const F = fit($('intens')); if (!F) return;
+  const { g, x0, y1, iw, ih } = F;
+  const [w0, w1] = S.win;
+  const m = A.intensity, row = m.rows[0];
+  if (!row) return;
+  let lo = Infinity, hi = -Infinity;
+  for (const v of row) if (isFinite(v) && v > 0) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  if (!isFinite(lo)) return;
+  lo = Math.floor(lo / 5) * 5; hi = Math.ceil(hi / 5) * 5;
+  if (hi - lo < 10) hi = lo + 10;
+  drawVAxis(F, lo, hi, 'dB', '#646c80');
+  shadeSelection(F, S.win[0], S.win[1]);
+  g.strokeStyle = '#8fd694'; g.lineWidth = 1.4; g.beginPath();
+  let started = false;
+  for (let i = 0; i < m.nx; i++) {
+    const v = row[i];
+    if (!isFinite(v) || v <= 0) { started = false; continue; }
+    const t = A.t0 + m.x1 + i * m.dx;
+    if (t < w0 || t > w1) { started = false; continue; }
+    const x = x0 + (t - w0) / (w1 - w0) * iw;
+    const y = y1 - (v - lo) / (hi - lo) * ih;
+    started ? g.lineTo(x, y) : g.moveTo(x, y);
+    started = true;
+  }
+  g.stroke(); g.lineWidth = 1;
+  drawCursor(F, w0, w1);
+  drawTimeAxis(F, w0, w1);
+  $('intensinfo').textContent = `${lo.toFixed(0)}–${hi.toFixed(0)} dB · To Intensity... ${A.p.pitchFloor} ${A.p.pitchStep} yes`;
 }
 
 function drawSpec() {
-  const cv = $('spec');
-  const { g, w, h } = fit(cv);
+  const F = fit($('spec')); if (!F) return;
+  const { g, x0, y0, y1, iw, ih } = F;
   const A = S.analysis;
-  if (!A) { g.fillStyle = '#0e1017'; g.fillRect(0, 0, w, h); return; }
-  const { spec, dyn, maxHz, t0, t1 } = A;
+  const mono = getComputedStyle(document.body).getPropertyValue('--mono');
+  if (!A) {
+    g.fillStyle = '#646c80'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '12px ui-sans-serif';
+    g.fillText('no analysis yet', F.w / 2, F.h / 2);
+    return;
+  }
+  const { spec, p } = A;
+  const [w0, w1] = S.win;
+  /* Everything is drawn against the VISIBLE window, and the analysed window is
+     mapped into it. While a re-analysis is pending after a zoom, that leaves
+     the old spectrogram sitting under the moment it actually describes rather
+     than stretched across the new axis — a stale picture is tolerable, a
+     mislabelled one is not. */
+  const xOf = t => x0 + (t - w0) / (w1 - w0) * iw;
+  const yOfHz = f => y1 - (f / p.maxHz) * ih;
+  const stale = Math.abs(A.t0 - w0) > 1e-6 || Math.abs(A.t1 - w1) > 1e-6;
 
-  /* Power -> dB against Praat's auditory reference (4e-10 Pa^2/Hz), then a
-     fixed dynamic range below the window maximum. Same convention Praat's own
-     spectrogram paint uses, so the picture is comparable to the desktop app. */
-  let peak = -Infinity;
+  /* Praat's own scaling: power to dB re 4e-10 Pa^2, then a `dynamic range`
+     window below the strongest point in the analysed window. */
   const db = spec.rows.map(row => {
     const out = new Float64Array(row.length);
-    for (let i = 0; i < row.length; i++) {
-      const v = 10 * Math.log10(Math.max(row[i], 1e-30) / 4e-10);
-      out[i] = v; if (v > peak) peak = v;
-    }
+    for (let i = 0; i < row.length; i++)
+      out[i] = 10 * Math.log10(Math.max(row[i], 1e-30) / 4e-10);
     return out;
   });
-  const floor = peak - dyn;
-  const img = g.createImageData(w, h);
-  for (let x = 0; x < w; x++) {
-    const col = Math.min(spec.nx - 1, Math.floor(x / w * spec.nx));
-    for (let y = 0; y < h; y++) {
-      // Row 0 is the lowest frequency; canvas y grows downward.
-      const bin = Math.min(spec.ny - 1, Math.floor((1 - y / h) * spec.ny));
-      const val = db[bin] ? db[bin][col] : floor;
-      const t = Math.max(0, Math.min(1, (val - floor) / dyn));
-      const s = Math.round(255 * (1 - t));           // dark = loud, as in Praat
-      const o = (y * w + x) * 4;
-      img.data[o] = img.data[o + 1] = img.data[o + 2] = s; img.data[o + 3] = 255;
+  let peak = -Infinity;
+  for (const row of db) for (const v of row) if (v > peak) peak = v;
+  const floor = peak - p.dyn;
+
+  /* Render at the spectrogram's own resolution and let the canvas scale it.
+     Sampling per screen pixel, as this used to do, throws away frames whenever
+     the window is wider than the pane and cannot place the image anywhere but
+     across the whole box. */
+  const off = document.createElement('canvas');
+  off.width = spec.nx; off.height = spec.ny;
+  const og = off.getContext('2d');
+  const img = og.createImageData(spec.nx, spec.ny);
+  for (let y = 0; y < spec.ny; y++) {
+    const row = db[spec.ny - 1 - y];
+    for (let x = 0; x < spec.nx; x++) {
+      const t = Math.max(0, Math.min(1, ((row ? row[x] : floor) - floor) / p.dyn));
+      const v = Math.round(255 * (1 - t));           // dark = loud, as in Praat
+      const o = (y * spec.nx + x) * 4;
+      img.data[o] = img.data[o + 1] = img.data[o + 2] = v; img.data[o + 3] = 255;
     }
   }
-  g.putImageData(img, 0, 0);
+  og.putImageData(img, 0, 0);
 
-  const xOf = t => (t - t0) / (t1 - t0) * w;
-  const yOfHz = f => h - (f / maxHz) * h;
+  g.save();
+  g.beginPath(); g.rect(x0, y0, iw, ih); g.clip();
+  const xa = xOf(A.t0), xb = xOf(A.t1);
+  g.globalAlpha = stale ? 0.45 : 1;
+  g.drawImage(off, xa, y0, Math.max(1, xb - xa), ih);
+  g.globalAlpha = 1;
+  g.restore();
 
-  // Formants as dotted tracks (Praat draws them as dots, not joined lines —
-  // joining them would imply continuity across unvoiced gaps that isn't there).
-  const cols = ['#ff6b6b', '#4ecdc4', '#c792ea'];
-  A.formants.forEach((m, i) => {
-    g.fillStyle = cols[i];
-    const row = m.rows[0]; if (!row) return;
-    for (let k = 0; k < m.nx; k++) {
-      const f = row[k];
-      if (!isFinite(f) || f <= 0 || f > maxHz) continue;
-      const t = m.x1 + k * m.dx;
-      g.fillRect(xOf(t + t0) - 1, yOfHz(f) - 1, 2.5, 2.5);
-    }
-  });
-
-  // f0 on its own scale (0–500 Hz mapped to the lower half) so it stays legible
-  // over a 5 kHz spectrogram instead of hugging the floor.
-  const prow = A.pitch.rows[0];
-  if (prow) {
-    g.fillStyle = '#ffd166';
-    for (let k = 0; k < A.pitch.nx; k++) {
-      const f = prow[k];
-      if (!isFinite(f) || f <= 0) continue;
-      const t = A.pitch.x1 + k * A.pitch.dx;
-      g.fillRect(xOf(t + t0) - 1, h - (Math.min(f, 500) / 500) * h * 0.5 - 1, 3, 3);
-    }
-  }
-
-  // Frequency gridlines
-  g.strokeStyle = 'rgba(110,168,254,.25)'; g.fillStyle = '#8b93a7';
-  g.font = '10px ui-monospace,monospace'; g.lineWidth = 1;
-  for (let f = 1000; f < maxHz; f += 1000) {
+  // Frequency gridlines over the image, faint so they do not read as energy.
+  const step = niceStep(p.maxHz, Math.max(2, Math.round(ih / 46)));
+  g.strokeStyle = 'rgba(110,168,254,0.16)'; g.fillStyle = '#646c80';
+  g.font = '10px ' + mono;
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  g.beginPath();
+  for (let f = step; f <= p.maxHz - 1e-9; f += step) {
     const y = yOfHz(f);
-    g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
-    g.fillText(f / 1000 + 'k', 3, y - 2);
+    g.moveTo(x0, y + .5); g.lineTo(F.x1, y + .5);
+    g.fillText(String(Math.round(f)), x0 - 5, y);
   }
+  g.stroke();
+  g.fillText('0', x0 - 5, y1);
+  g.save(); g.translate(11, (y0 + y1) / 2); g.rotate(-Math.PI / 2);
+  g.textAlign = 'center'; g.fillText('Hz', 0, 0); g.restore();
+
+  /* f0 gets its own axis on the right, as in Praat's editor. Plotting it on the
+     spectrogram's own scale would put a 120 Hz pitch inside the first formant,
+     which is a picture that invites a wrong reading. */
+  const f0max = p.pitchCeil;
+  g.fillStyle = '#ffd166'; g.textAlign = 'left';
+  const fstep = niceStep(f0max, Math.max(2, Math.round(ih / 46)));
+  for (let f = fstep; f <= f0max - 1e-9; f += fstep)
+    g.fillText(String(Math.round(f)), F.x1 + 5, y1 - f / f0max * ih);
+  g.save(); g.translate(F.x1 + 40, (y0 + y1) / 2); g.rotate(Math.PI / 2);
+  g.textAlign = 'center'; g.fillText('f0 Hz', 0, 0); g.restore();
+
+  g.save();
+  g.beginPath(); g.rect(x0, y0, iw, ih); g.clip();
+  g.globalAlpha = stale ? 0.5 : 1;
+  if ($('showFmt').checked) {
+    const cols = ['#ff6b6b', '#4ecdc4', '#c792ea'];
+    A.formants.forEach((m, i) => {
+      g.fillStyle = cols[i];
+      const row = m.rows[0]; if (!row) return;
+      for (let k = 0; k < m.nx; k++) {
+        const f = row[k];
+        if (!isFinite(f) || f <= 0 || f > p.maxHz) continue;
+        g.fillRect(xOf(A.t0 + m.x1 + k * m.dx) - 1.1, yOfHz(f) - 1.1, 2.2, 2.2);
+      }
+    });
+  }
+  if ($('showF0').checked) {
+    const m = A.pitch, row = m.rows[0];
+    if (row) {
+      g.strokeStyle = '#ffd166'; g.lineWidth = 2; g.beginPath();
+      let on = false;
+      for (let k = 0; k < m.nx; k++) {
+        const f = row[k];
+        if (!isFinite(f) || f <= 0) { on = false; continue; }
+        const y = y1 - Math.min(1, f / f0max) * ih;
+        const x = xOf(A.t0 + m.x1 + k * m.dx);
+        on ? g.lineTo(x, y) : g.moveTo(x, y);
+        on = true;
+      }
+      g.stroke(); g.lineWidth = 1;
+    }
+  }
+  g.globalAlpha = 1;
+  g.restore();
+
+  if (stale) {
+    g.fillStyle = '#ffb86c'; g.textAlign = 'left'; g.textBaseline = 'top';
+    g.font = '10px ' + mono;
+    g.fillText(`analysed ${f3(A.t0)}–${f3(A.t1)} s — re-analysing`, x0 + 5, y0 + 3);
+  }
+
+  shadeSelection(F, w0, w1);
+  drawCursor(F, w0, w1);
+  drawTimeAxis(F, w0, w1);
+}
+
+/* ------------------------------------------------------------ tier lanes */
+/* The lanes are drawn even when empty, and a lane whose model has not run yet
+   says so where the annotation would be. A blank strip and a strip that is
+   still being computed look identical otherwise, and the difference matters
+   when one recogniser has already returned and the other has not. */
+let hatchPhase = 0, hatchTimer = null;
+
+function laneCaption(t) {
+  if (t.state === 'running') return `${t.model}: reading the signal`;
+  if (t.state === 'partial') return `${t.model}: ${t.items.length} so far`;
+  if (t.state === 'queued') return `${t.model}: queued`;
+  if (t.state === 'failed') return `${t.model}: failed`;
+  if (t.state === 'cancelled') return `${t.model}: cancelled`;
+  if (t.state === 'done' && !t.items.length) return `${t.model} returned no ${t.role}`;
+  if (t.model) return `${t.model}: not run`;
+  return 'no model chosen';
 }
 
 function drawTiers() {
-  const { g, w, h } = fit($('tiers'));
-  g.fillStyle = '#0e1017'; g.fillRect(0, 0, w, h);
-  if (!S.audio) return;
-  const [t0, t1] = S.win, span = t1 - t0;
-  const xOf = t => (t - t0) / span * w;
+  const F = fit($('tiers')); if (!F) return;
+  const { g, x0, y0, y1, iw } = F;
+  const [t0, t1] = S.win, span = t1 - t0 || 1;
+  const xOf = t => x0 + (t - t0) / span * iw;
   const lanes = [
-    { name: 'words', y: 6, hh: h / 2 - 10 },
-    { name: 'phones', y: h / 2 + 4, hh: h / 2 - 10 },
+    { key: 'word', label: 'words' },
+    { key: 'phone', label: 'phones' },
   ];
-  g.font = '11px ui-sans-serif';
-  for (const lane of lanes) {
-    g.strokeStyle = '#2a2f3d';
-    g.strokeRect(0.5, lane.y + .5, w - 1, lane.hh);
-    g.fillStyle = '#8b93a7'; g.font = '9px ui-sans-serif';
-    g.fillText(lane.name, 4, lane.y + 10);
-  }
-  const vis = it => it.end >= t0 && it.start <= t1;
-  const all = tiersFromCues(S.audio.duration);
-  const words = all.words.filter(vis), phones = all.phones.filter(vis);
-  const paint = (items, lane, cls) => {
-    g.font = (cls === 'ipa' ? '12px "DejaVu Sans Mono",monospace' : '11px ui-sans-serif');
-    for (const it of items) {
-      const a = Math.max(0, xOf(it.start)), b = Math.min(w, xOf(it.end));
-      if (b - a < 0.5) continue;
-      g.fillStyle = cls === 'ipa' ? 'rgba(199,146,234,.13)' : 'rgba(110,168,254,.13)';
-      g.fillRect(a, lane.y, b - a, lane.hh);
-      g.strokeStyle = cls === 'ipa' ? '#6c5a86' : '#3c5a8a';
-      g.beginPath(); g.moveTo(a + .5, lane.y); g.lineTo(a + .5, lane.y + lane.hh); g.stroke();
-      const label = it.text || '';
-      if (label && b - a > 8) {
-        g.save(); g.beginPath(); g.rect(a + 2, lane.y, b - a - 3, lane.hh); g.clip();
+  const lh = (y1 - y0) / lanes.length;
+  const mono = getComputedStyle(document.body).getPropertyValue('--mono');
+
+  lanes.forEach((lane, i) => {
+    const t = S.tracks[lane.key];
+    const ly = y0 + i * lh;
+    g.fillStyle = '#0b0d13'; g.fillRect(x0, ly, iw, lh - 2);
+    g.strokeStyle = '#2a2f3d'; g.strokeRect(x0 + .5, ly + .5, iw - 1, lh - 3);
+
+    // gutter: tier name, then which model filled it
+    g.fillStyle = '#8b93a7'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    g.font = '11px ui-sans-serif';
+    g.fillText(lane.label, x0 - 6, ly + lh / 2 - 6);
+    g.fillStyle = t.state === 'done' ? '#7bd88f'
+                : t.state === 'failed' ? '#ff6b6b'
+                : (t.state === 'running' || t.state === 'partial') ? '#6ea8fe' : '#646c80';
+    g.font = '9.5px ' + mono;
+    g.fillText(t.source || t.model || '—', x0 - 6, ly + lh / 2 + 7);
+
+    const busy = t.state === 'running' || t.state === 'queued' || t.state === 'partial';
+    if (busy && !t.items.length) {
+      // Marching diagonals: unmistakably "being worked on", and not a value.
+      g.save();
+      g.beginPath(); g.rect(x0 + 1, ly + 1, iw - 2, lh - 4); g.clip();
+      g.strokeStyle = t.state === 'queued' ? 'rgba(255,184,108,0.18)' : 'rgba(110,168,254,0.22)';
+      g.lineWidth = 6;
+      g.beginPath();
+      for (let x = -lh * 2 + (hatchPhase % 28); x < iw + lh * 2; x += 28) {
+        g.moveTo(x0 + x, ly + lh); g.lineTo(x0 + x + lh, ly);
+      }
+      g.stroke(); g.lineWidth = 1;
+      g.restore();
+      g.fillStyle = t.state === 'queued' ? '#ffb86c' : '#6ea8fe';
+      g.textAlign = 'center'; g.font = '11px ui-sans-serif';
+      g.fillText(laneCaption(t), (x0 + F.x1) / 2, ly + lh / 2);
+      return;
+    }
+    if (!t.items.length) {
+      g.fillStyle = '#4b5265'; g.textAlign = 'center'; g.font = '11px ui-sans-serif';
+      g.fillText(laneCaption(t), (x0 + F.x1) / 2, ly + lh / 2);
+      return;
+    }
+
+    g.textAlign = 'center';
+    g.font = (lane.key === 'phone' ? '13px ' + mono : '12px ui-sans-serif');
+    for (const it of t.items) {
+      if (it.end < t0 || it.start > t1) continue;
+      const a = Math.max(x0, xOf(it.start)), b = Math.min(F.x1, xOf(it.end));
+      g.fillStyle = it === S.selectedItem ? 'rgba(110,168,254,0.32)' : 'rgba(110,168,254,0.10)';
+      g.fillRect(a, ly + 1, Math.max(1, b - a), lh - 4);
+      g.strokeStyle = '#3b4560';
+      g.beginPath(); g.moveTo(a + .5, ly + 1); g.lineTo(a + .5, ly + lh - 3); g.stroke();
+      if (b - a > 7) {
         g.fillStyle = '#e7e9ef';
-        g.fillText(label, a + 4, lane.y + lane.hh / 2 + 5);
+        g.save();
+        g.beginPath(); g.rect(a, ly, Math.max(1, b - a), lh); g.clip();
+        g.fillText(it.text || '', (a + b) / 2, ly + lh / 2);
         g.restore();
       }
     }
-  };
-  paint(words, lanes[0], 'word');
-  paint(phones, lanes[1], 'ipa');
+    // closing boundary of the last visible interval
+    const last = t.items[t.items.length - 1];
+    if (last && last.end <= t1) {
+      const x = xOf(last.end);
+      g.strokeStyle = '#3b4560';
+      g.beginPath(); g.moveTo(x - .5, ly + 1); g.lineTo(x - .5, ly + lh - 3); g.stroke();
+    }
+  });
+
+  shadeSelection(F, t0, t1);
+  drawCursor(F, t0, t1);
+  drawTimeAxis(F, t0, t1);
 }
 
-/* --------------------------------------------------- window interactions */
+function anyBusy() {
+  return ['word', 'phone'].some(k => ['queued', 'running', 'partial'].includes(S.tracks[k].state));
+}
+function tickHatch() {
+  if (!anyBusy()) { hatchTimer = null; return; }
+  hatchPhase += 0.9;
+  drawTiers();
+  hatchTimer = requestAnimationFrame(tickHatch);
+}
+function ensureHatch() { if (!hatchTimer && anyBusy()) hatchTimer = requestAnimationFrame(tickHatch); }
+
+function drawAll() {
+  drawOverview(); drawWave(); drawIntensity(); drawSpec(); drawTiers();
+  const [t0, t1] = S.win;
+  $('wininfo').textContent =
+    `window ${f3(t0)}–${f3(t1)} s (${f3(t1 - t0)} s, ${Math.round((t1 - t0) * (S.audio?.sampleRate || 0))} samples)`;
+  updateSelInfo();
+  ensureHatch();
+}
+
+function updateSelInfo() {
+  const row = $('selrow');
+  $('playsel').disabled = $('zoomSel').disabled = !S.sel;
+  if (!S.sel) { row.hidden = true; return; }
+  row.hidden = false;
+  const [a, b] = S.sel, A = S.analysis;
+  let mean = NaN, n = 0, sum = 0;
+  if (A && A.pitch.rows[0]) {
+    const m = A.pitch;
+    for (let i = 0; i < m.nx; i++) {
+      const t = A.t0 + m.x1 + i * m.dx;
+      if (t < a || t > b) continue;
+      const v = m.rows[0][i];
+      if (isFinite(v) && v > 0) { sum += v; n++; }
+    }
+    mean = n ? sum / n : NaN;
+  }
+  const inSel = k => S.tracks[k].items.filter(it => it.end > a && it.start < b).length;
+  $('selinfo').textContent =
+    `selection ${f3(a)}–${f3(b)} s · ${((b - a) * 1000).toFixed(1)} ms · ` +
+    `${(1 / (b - a)).toFixed(2)} Hz · mean f0 ${n ? mean.toFixed(1) + ' Hz (' + n + ' frames)' : '—'} · ` +
+    `${inSel('word')} words, ${inSel('phone')} phones`;
+}
+
+/* --------------------------------------------------------- interactions */
+function clampWin(a, b) {
+  const span = Math.min(Math.max(b - a, 0.01), S.dur || 1);
+  let t0 = Math.max(0, Math.min(a, (S.dur || 0) - span));
+  return [t0, t0 + span];
+}
+let analyseTimer = null;
+function setWindow(a, b, redraw = true) {
+  S.win = clampWin(a, b);
+  if (redraw) drawAll();
+  clearTimeout(analyseTimer);
+  analyseTimer = setTimeout(analyse, 220);
+}
+function xToTime(e, t0, t1) {
+  const r = e.currentTarget.getBoundingClientRect();
+  const frac = (e.clientX - r.left - PAD.l) / Math.max(1, r.width - PAD.l - PAD.r);
+  return t0 + Math.max(0, Math.min(1, frac)) * (t1 - t0);
+}
+
+// overview: click or drag to move the window across the file
+let panning = false;
+for (const ev of ['pointerdown', 'pointermove']) {
+  $('overview').addEventListener(ev, e => {
+    if (!S.audio) return;
+    if (ev === 'pointerdown') { panning = true; e.currentTarget.setPointerCapture(e.pointerId); }
+    else if (!panning) return;
+    const t = xToTime(e, 0, S.dur);
+    const span = S.win[1] - S.win[0];
+    setWindow(t - span / 2, t + span / 2);
+  });
+}
+addEventListener('pointerup', () => { panning = false; });
+
+// waveform: drag selects, click probes
 let drag = null;
 $('wave').addEventListener('pointerdown', e => {
   if (!S.audio) return;
-  const r = e.currentTarget.getBoundingClientRect();
-  drag = { a: (e.clientX - r.left) / r.width * S.audio.duration, moved: false };
   e.currentTarget.setPointerCapture(e.pointerId);
+  drag = { a: xToTime(e, S.win[0], S.win[1]), moved: false };
 });
 $('wave').addEventListener('pointermove', e => {
-  if (!drag || !S.audio) return;
-  const r = e.currentTarget.getBoundingClientRect();
-  const b = (e.clientX - r.left) / r.width * S.audio.duration;
-  if (Math.abs(b - drag.a) > 0.02) { drag.moved = true; S.win = [Math.min(drag.a, b), Math.max(drag.a, b)]; drawWave(); drawTiers(); }
-});
-$('wave').addEventListener('pointerup', async e => {
   if (!drag) return;
-  const wasDrag = drag.moved; const at = drag.a; drag = null;
-  if (wasDrag) await analyse();
-  else { play(at, Math.min(at + 2, S.audio.duration)); }
+  const b = xToTime(e, S.win[0], S.win[1]);
+  if (Math.abs(b - drag.a) > (S.win[1] - S.win[0]) / 400) drag.moved = true;
+  if (drag.moved) { S.sel = [Math.min(drag.a, b), Math.max(drag.a, b)]; drawAll(); }
+});
+$('wave').addEventListener('pointerup', e => {
+  if (!drag) return;
+  const moved = drag.moved, at = drag.a;
+  drag = null;
+  if (!moved) { S.sel = null; probe(at); drawAll(); }
 });
 
-$('spec').addEventListener('mousemove', e => {
-  const A = S.analysis; if (!A) return;
+$('spec').addEventListener('pointermove', e => {
+  if (!S.analysis) return;
   const r = e.currentTarget.getBoundingClientRect();
-  const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
-  const t = A.t0 + fx * (A.t1 - A.t0);
-  const hz = (1 - fy) * A.maxHz;
-  const idx = m => Math.max(0, Math.min(m.nx - 1, Math.round((t - A.t0 - m.x1) / m.dx)));
-  const f0 = A.pitch.rows[0]?.[idx(A.pitch)];
-  const fv = A.formants.map(m => m.rows[0]?.[idx(m)]);
-  const fmt = v => (isFinite(v) && v > 0) ? Math.round(v) + ' Hz' : '—';
-  $('readout').innerHTML =
-    `t <b>${t.toFixed(3)} s</b>　cursor <b>${Math.round(hz)} Hz</b>　` +
-    `f0 <b style="color:var(--f0)">${fmt(f0)}</b>　` +
-    `F1 <b style="color:var(--f1)">${fmt(fv[0])}</b>　` +
-    `F2 <b style="color:var(--f2)">${fmt(fv[1])}</b>　` +
-    `F3 <b style="color:var(--f3)">${fmt(fv[2])}</b>`;
+  const fy = (e.clientY - r.top - PAD.t) / Math.max(1, r.height - PAD.t - PAD.b);
+  probe(xToTime(e, S.win[0], S.win[1]), (1 - Math.max(0, Math.min(1, fy))) * S.analysis.p.maxHz);
 });
+$('spec').addEventListener('pointerdown', e => { probe(xToTime(e, S.win[0], S.win[1])); drawAll(); });
+$('tiers').addEventListener('pointerdown', e => {
+  const t = xToTime(e, S.win[0], S.win[1]);
+  const r = e.currentTarget.getBoundingClientRect();
+  const key = (e.clientY - r.top) < r.height / 2 ? 'word' : 'phone';
+  const hit = S.tracks[key].items.find(it => it.start <= t && t <= it.end);
+  if (hit) { S.sel = [hit.start, hit.end]; S.selectedItem = hit; $('segWhich').value = key; renderSegments(); }
+  probe(t); drawAll();
+});
+
+function labelAt(t) {
+  const w = S.tracks.word.items.find(it => it.start <= t && t <= it.end);
+  const p = S.tracks.phone.items.find(it => it.start <= t && t <= it.end);
+  return [p && p.text, w && w.text].filter(Boolean).join(' / ') || '—';
+}
+
+function probe(t, cursorHz) {
+  S.cursor = t;
+  const A = S.analysis;
+  $('rT').textContent = f3(t) + ' s';
+  if (cursorHz != null) $('rHz').textContent = hz(cursorHz);
+  if (A) {
+    $('rF0').textContent = hz(sampleAt(A.pitch, t, A.t0));
+    ['rF1', 'rF2', 'rF3'].forEach((id, i) => { $(id).textContent = hz(sampleAt(A.formants[i], t, A.t0)); });
+    const iv = A.intensity ? sampleAt(A.intensity, t, A.t0) : NaN;
+    $('rInt').textContent = isFinite(iv) ? iv.toFixed(1) + ' dB' : '—';
+  }
+  $('rLab').textContent = labelAt(t);
+}
+
+$('zoomIn').addEventListener('click', () => {
+  const c = S.cursor ?? (S.win[0] + S.win[1]) / 2, s = (S.win[1] - S.win[0]) / 4;
+  setWindow(c - s, c + s);
+});
+$('zoomOut').addEventListener('click', () => {
+  const c = S.cursor ?? (S.win[0] + S.win[1]) / 2, s = S.win[1] - S.win[0];
+  setWindow(c - s, c + s);
+});
+$('zoomAll').addEventListener('click', () => setWindow(0, S.dur));
+$('zoomSel').addEventListener('click', () => { if (S.sel) setWindow(S.sel[0], S.sel[1]); });
+for (const id of ['showF0', 'showFmt']) $(id).addEventListener('change', drawSpec);
 
 /* ------------------------------------------------------------- playback */
 function play(from, to) {
   if (!S.audio) return;
-  S.src?.stop();
+  if (S.src) { try { S.src.stop(); } catch {} }
   const src = S.ctx.createBufferSource();
   src.buffer = S.audio; src.connect(S.ctx.destination);
-  src.start(0, from, Math.max(0.02, to - from));
+  src.start(0, from, Math.max(0.01, to - from));
   S.src = src;
 }
-$('play').addEventListener('click', () => S.audio && play(0, S.audio.duration));
-$('playsel').addEventListener('click', () => play(S.win[0], S.win[1]));
+$('play').addEventListener('click', () => play(0, S.dur));
+$('playwin').addEventListener('click', () => play(S.win[0], S.win[1]));
+$('playsel').addEventListener('click', () => S.sel && play(S.sel[0], S.sel[1]));
 
-/* -------------------------------------------------------------- settings */
-function openSettings(open) {
-  $('settings').hidden = !open;
-  if (open) { $('asrbase').value = CFG.asrBase; $('ctrlbase').value = CFG.ctrlBase; }
-}
-$('gear').addEventListener('click', () => openSettings($('settings').hidden));
-$('gearclose').addEventListener('click', () => openSettings(false));
+addEventListener('keydown', e => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  if (e.code === 'Space') { e.preventDefault(); S.sel ? play(S.sel[0], S.sel[1]) : play(S.win[0], S.win[1]); }
+});
 
-function applySettings() {
-  CFG.asrBase = $('asrbase').value.trim();
-  CFG.ctrlBase = $('ctrlbase').value.trim();
-  saveCfg();
-  controlOk = true;          // give the new endpoint a fresh chance
-}
-$('asrbase').addEventListener('change', applySettings);
-$('ctrlbase').addEventListener('change', applySettings);
+/* ------------------------------------------------------------ connection */
+/* Two ways to reach a recogniser, and the page does not care which:
 
-/* Populate the model list from the endpoint. This is the standard OpenAI
-   /v1/models shape, so it works against llama-swap, vLLM, a plain whisper
-   server, or anything else that implements it. The field stays free text —
-   plenty of servers do not list their audio models. */
-async function loadModels() {
-  applySettings();
-  const el = $('asrstate');
-  el.textContent = 'checking…';
-  try {
-    const r = await fetch(asrUrl('/v1/models'), { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json();
-    const ids = (j.data || []).map(m => m.id).filter(Boolean).sort();
-    $('modellist').innerHTML = ids.map(i => `<option value="${i}"></option>`).join('');
-    el.textContent = `${ids.length} model${ids.length === 1 ? '' : 's'} listed`;
-  } catch (e) {
-    $('modellist').innerHTML = '';
-    el.textContent = 'could not list models (' + e.message + ') — you can still type an id';
-    if (!uiBusy) status('no ASR endpoint configured — analysis and TextGrid export still work (⚙ to add one)');
-  }
-  const u = ctrlUrl('/progress');
-  if (u) {
+   broker — this page's own server holds the provider list and any API keys,
+            and proxies the request. Same origin, so no CORS, and the key never
+            reaches the browser.
+   direct — the browser posts straight at an endpoint you name. Nothing to
+            install, but the endpoint must send CORS headers and any key would
+            be visible here, so this mode is for local and unauthenticated
+            services.
+
+   Neither is required. With no recogniser at all the analysis, the tiers and
+   the TextGrid export still work; a hand annotation starts from an empty grid. */
+const enc = encodeURIComponent;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const asrUrl = path => (CFG.asrBase || '').replace(/\/$/, '') + path;
+const ctrlUrl = path => CFG.ctrlBase ? asrUrl(CFG.ctrlBase.replace(/\/$/, '') + path) : null;
+
+const ROLE_HINTS = { ipa: 'both', 'ipa-buckeye': 'both', mms: 'words', whisper: 'words', owsm: 'words' };
+const guessRole = id => ROLE_HINTS[id] || (/ipa|phone|xeus|buckeye|allosaurus/i.test(id) ? 'both' : 'words');
+
+const NET = {
+  mode: 'direct', providers: [], provider: null, models: [], controlOk: true,
+
+  async discover() {
+    try {
+      const r = await fetch(apiUrl('/providers'), { cache: 'no-store' });
+      if (r.ok) NET.providers = (await r.json()).providers || [];
+    } catch { NET.providers = []; }
+    NET.mode = CFG.mode === 'direct' ? 'direct'
+             : CFG.mode === 'broker' ? 'broker'
+             : (NET.providers.length ? 'broker' : 'direct');
+    NET.provider = NET.providers.find(p => p.id === CFG.provider)
+                || NET.providers.find(p => p.ready) || NET.providers[0] || null;
+    if (NET.mode === 'broker' && NET.provider) CFG.provider = NET.provider.id;
+    NET.controlOk = true;
+    renderConnection();
+    await NET.loadModels();
+  },
+
+  hasControl() {
+    return NET.mode === 'broker' ? !!(NET.provider && NET.provider.control)
+                                 : !!ctrlUrl('/progress');
+  },
+
+  async loadModels() {
+    if (NET.mode === 'broker') {
+      NET.models = (NET.provider?.models || []).map(m => ({
+        id: m.id, label: m.label || m.id, role: m.role || guessRole(m.id) }));
+      $('asrstate').textContent = 'not checked';
+    } else {
+      try {
+        const r = await fetch(asrUrl('/v1/models'), { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const ids = ((await r.json()).data || []).map(m => m.id).filter(Boolean).sort();
+        NET.models = ids.map(id => ({ id, label: id, role: guessRole(id) }));
+        $('asrstate').textContent = `${ids.length} model${ids.length === 1 ? '' : 's'} listed`
+          + (NET.hasControl() ? '' : ' · no control endpoint');
+      } catch (e) {
+        NET.models = [];
+        $('asrstate').textContent = 'could not list models (' + e.message + ')';
+      }
+    }
+    fillModelSelects();
+    renderConnection();
+  },
+
+  transcribeUrl() {
+    return NET.mode === 'broker' ? apiUrl('/transcribe') : asrUrl('/v1/audio/transcriptions');
+  },
+  controlPath(tail) {
+    if (NET.mode === 'broker') {
+      if (!NET.provider || !NET.provider.control) return null;
+      const join = tail.includes('?') ? '&' : '?';
+      return apiUrl(tail) + join + 'provider=' + enc(NET.provider.id);
+    }
+    return ctrlUrl(tail);
+  },
+  async progress() {
+    const u = NET.controlPath('/progress');
+    if (!u || !NET.controlOk) return null;
     try {
       const r = await fetch(u, { cache: 'no-store' });
-      controlOk = r.ok;
-      el.textContent += r.ok ? ' · progress + cancel available' : ' · no progress endpoint';
-    } catch { controlOk = false; el.textContent += ' · no progress endpoint'; }
+      if (!r.ok) { NET.controlOk = false; return null; }
+      const j = await r.json();
+      if (j.unsupported) { NET.controlOk = false; return null; }
+      return j;
+    } catch { NET.controlOk = false; return null; }
+  },
+  async partial(since) {
+    const u = NET.controlPath('/partial?since=' + since);
+    if (!u || !NET.controlOk) return null;
+    try {
+      const r = await fetch(u, { cache: 'no-store' });
+      if (!r.ok) return null;
+      const j = await r.json();
+      return j && !j.unsupported ? j : null;
+    } catch { return null; }
+  },
+  async cancel() {
+    const u = NET.controlPath('/cancel');
+    if (!u) throw new Error('this connection has no cancel endpoint');
+    await fetch(u, { method: 'POST' });
+  },
+};
+
+function renderConnection() {
+  const chip = $('connchip');
+  if (NET.mode === 'broker' && NET.provider) {
+    chip.className = 'chip ' + (NET.provider.ready ? 'live' : 'none');
+    chip.innerHTML = `<b>${esc(NET.provider.label)}</b> · ${NET.models.length} models`
+      + (NET.provider.ready ? '' : ' · no key');
+  } else if (NET.mode === 'broker') {
+    chip.className = 'chip none';
+    chip.textContent = 'no providers configured';
+  } else {
+    chip.className = 'chip ' + (NET.models.length ? 'live' : 'none');
+    chip.innerHTML = `<b>direct</b> · ${esc(CFG.asrBase || 'same origin')}`
+      + (NET.models.length ? ` · ${NET.models.length} models` : '');
   }
-}
-$('asrtest').addEventListener('click', loadModels);
-loadModels();
-
-/* ------------------------------------------------------------- job state */
-/* The ASR service is a shared, single-tenant resource: a long file is minutes
-   of GPU work, and a reload used to leave the page cheerfully offering Run
-   while the backend was still busy — which came back as llama-swap's bare
-   "Too many requests". Poll the service instead so the page always reflects
-   what the backend is actually doing, including jobs this tab did not start. */
-
-function showBusy(j) {
-  const pct = j.total > 0 ? Math.min(100, j.done / j.total * 100) : 0;
-  $('bar').hidden = false;
-  $('bar').classList.toggle('indet', !(j.total > 0));
-  $('barfill').style.width = j.total > 0 ? pct.toFixed(1) + '%' : '';
-  const where = j.total > 0 ? ` ${j.done.toFixed(1)}/${j.total.toFixed(1)}s (${pct.toFixed(0)}%)` : '';
-  status(`${j.model}: ${j.stage || 'working'}${where} — ${j.elapsed ?? 0}s`);
-  uiBusy = true;
-  $('run').disabled = true;
-  $('stop').hidden = !ctrlUrl('/cancel');
+  $('modeBroker').checked = NET.mode === 'broker';
+  $('modeDirect').checked = NET.mode === 'direct';
+  $('fsBroker').disabled = NET.mode !== 'broker';
+  $('fsDirect').disabled = NET.mode !== 'direct';
+  $('provider').innerHTML = NET.providers.map(p =>
+    `<option value="${esc(p.id)}"${p.id === CFG.provider ? ' selected' : ''}>` +
+    `${esc(p.label)}${p.ready ? '' : ' — no key'}</option>`).join('')
+    || '<option value="">(none — copy providers.example.json)</option>';
+  $('providerNote').textContent = NET.provider?.note || (NET.provider ? NET.provider.base : '');
 }
 
-function showIdle(note) {
-  // Only replace the text if we were showing a live job — otherwise this would
-  // clobber the run handler's own "done in 12.3 s" or its error message.
-  if (uiBusy && note) status(note);
-  uiBusy = false;
-  $('bar').hidden = true; $('bar').classList.remove('indet');
-  $('stop').hidden = true;
-  $('run').disabled = !S.audio;
-}
-
-async function pollOnce() {
-  try {
-    const u = ctrlUrl('/progress');
-    if (!u || !controlOk) return null;
-    const r = await fetch(u, { cache: 'no-store' });
-    if (!r.ok) { controlOk = false; return null; }
-    return await r.json();
-  } catch { controlOk = false; return null; }
-}
-
-function stopPolling() {
-  if (poller) { clearInterval(poller); poller = null; }
-}
-
-function startPolling() {
-  if (poller) return;
-  /* Do NOT stop on the first idle reading. The server only marks the job active
-     after it has read the whole upload, so a poll 700 ms after clicking Run
-     legitimately sees active:false — treating that as "finished" used to kill
-     the poller instantly and re-enable Run, which is the bug this whole panel
-     exists to prevent. Require two consecutive idle ticks, and never stop at
-     all while our own request is still outstanding. */
-  let idleTicks = 0;
-  poller = setInterval(async () => {
-    const j = await pollOnce();
-    if (!j) return;
-    if (j.active) { idleTicks = 0; showBusy(j); return; }
-    idleTicks++;
-    if (awaitingOwnJob || idleTicks < 2) return;
-    stopPolling();
-    showIdle(S.audio ? 'idle — press Run ASR' : 'idle — choose an audio file');
-  }, 700);
-}
-
-$('stop').addEventListener('click', async () => {
-  $('stop').disabled = true;
-  try {
-    const u = ctrlUrl('/cancel');
-    if (!u) throw new Error('no control endpoint configured');
-    await fetch(u, { method: 'POST' }); status('cancelling…'); uiBusy = true;
+function fillModelSelects() {
+  for (const [key, id] of [['word', 'mdWord'], ['phone', 'mdPhone']]) {
+    const want = key === 'word' ? 'words' : 'phones';
+    const el = $(id), cur = S.tracks[key].model || (key === 'word' ? CFG.wordModel : CFG.phoneModel);
+    el.innerHTML = '<option value="">(none)</option>' + NET.models.map(m => {
+      const fits = m.role === 'both' || m.role === want;
+      return `<option value="${esc(m.id)}">${esc(m.label)}${fits ? '' : ' — ' + m.role + ' only'}</option>`;
+    }).join('');
+    el.value = NET.models.some(m => m.id === cur) ? cur : '';
+    S.tracks[key].model = el.value;
   }
-  catch (e) { status('cancel failed: ' + e.message, true); }
-  finally { $('stop').disabled = false; }
-});
-
-/* On load, adopt whatever the backend is already doing. Without this a reload
-   during a long job shows an enabled Run button that can only fail. */
-(async () => {
-  const j = await pollOnce();
-  if (j && j.active) { showBusy(j); startPolling(); }
-})();
-
-/* ------------------------------------------------------------------ ASR */
-$('run').addEventListener('click', async () => {
-  const model = $('model').value;
-  const fd = new FormData();
-  const f = $('file').files[0];
-  if (!f) return;
-  fd.append('file', f, f.name);
-  fd.append('model', model);
-  fd.append('response_format', 'verbose_json');
-  if ($('lang').value.trim()) fd.append('language', $('lang').value.trim());
-  if ($('asrsize').value && (model === 'ipa' || model === 'ipa-buckeye' || model === 'whisper'))
-    fd.append('asr_model', $('asrsize').value);
-
-  $('run').disabled = true;
-  $('stop').hidden = !ctrlUrl('/cancel');
-  $('bar').hidden = false; $('bar').classList.add('indet');
-  status(`running ${model}…`);
-  awaitingOwnJob = true;
-  startPolling();
-  const t0 = performance.now();
-  try {
-    /* Absolute path: this page is served under /upstream/praat/, so a relative
-       URL would hit the static server. The gateway root is where the swapping
-       happens, and it loads the `asr` service on demand. */
-    const r = await fetch(asrUrl('/v1/audio/transcriptions'), { method: 'POST', body: fd });
-    if (r.status === 429) {
-      // One GPU, one job. Say what is actually running rather than relaying
-      // whatever generic rate-limit text came back.
-      const j = await pollOnce();
-      throw new Error(j && j.active
-        ? `busy: ${j.model} is running (${j.stage || 'working'}, ${j.elapsed ?? 0}s). Press Stop, or wait.`
-        : 'the ASR service is busy with another request — try again in a moment.');
-    }
-    if (r.status === 409) throw new Error('cancelled.');
-    if ([404, 405, 501].includes(r.status)) throw new Error(
-      'no ASR endpoint at ' + (CFG.asrBase || 'this origin') +
-      ' — set one under ⚙, or work without ASR: the analysis and the TextGrid export ' +
-      'do not need a backend.');
-    if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 300)}`);
-    const j = await r.json();
-    S.cues = j.cues || [];
-    const nw = S.cues.reduce((a, c) => a + (c.words?.length || 0), 0);
-    const np = S.cues.reduce((a, c) => a + (c.words || []).reduce((b, w) => b + (w.phones?.length || 0), 0), 0);
-    $('tierinfo').textContent = S.cues.length
-      ? `${S.cues.length} cues · ${nw} words · ${np} phones · ${j.language || '?'}`
-      : `${model} returned text but no word alignment`;
-    $('dlTextGrid').disabled = false;
-    for (const b of ['dlSrt','dlAss']) $(b).disabled = !S.cues.length;
-    drawTiers();
-    status(`${model} done in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-  } catch (e) {
-    status('ASR failed: ' + e.message, true);
-  } finally {
-    awaitingOwnJob = false;
-    const j = await pollOnce();
-    if (!j || !j.active) { stopPolling(); showIdle(); }
-  }
-});
-
-/* --------------------------------------------------------------- exports */
-function download(name, text, type='text/plain') {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: type + ';charset=utf-8' }));
-  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  renderPlan();
 }
 
+/* ------------------------------------------------------------- the plan */
+function renderPlan() {
+  for (const [key, st, mt] of [['word', 'stWord', 'mtWord'], ['phone', 'stPhone', 'mtPhone']]) {
+    const t = S.tracks[key], el = $(st);
+    el.dataset.s = t.state;
+    const n = t.items.length;
+    const spin = (t.state === 'running' || t.state === 'partial') ? '<i class="spin"></i>' : '';
+    el.innerHTML = spin + ({
+      empty: 'no model', ready: 'ready', queued: 'queued', running: 'reading<span class="dots"></span>',
+      partial: `${n} so far`, done: `${n} intervals`, failed: 'failed', cancelled: 'cancelled',
+    }[t.state] || t.state);
+    const bits = [];
+    bits.push(key === 'word' ? 'orthographic transcription' : 'IPA read off the acoustics');
+    if (t.source) bits.push('from ' + t.source);
+    if (t.note) bits.push(t.note);
+    $(mt).textContent = bits.join(' · ');
+  }
+  const wm = S.tracks.word.model, pm = S.tracks.phone.model;
+  $('planNote').textContent = !wm && !pm
+    ? 'No model chosen. Everything except recognition works without one, including an empty TextGrid to annotate by hand.'
+    : (wm && wm === pm)
+      ? `${wm} fills both tiers in one pass, so it runs once.`
+      : wm && pm ? `${wm} runs first and fills the word tier; ${pm} follows for the phone tier.`
+      : `Only the ${wm ? 'word' : 'phone'} tier will be filled.`;
+  /* A model chosen for the phone tier often returns word boundaries too. If
+     the word tier ended up with one interval per segment while the phone model
+     had per-word timings, that is worth saying: the better annotation is
+     already on the machine and one select away. */
+  const wt = S.tracks.word, pt = S.tracks.phone;
+  if (wt.state === 'done' && /cue-level/.test(wt.note) &&
+      pt.cues.some(c => (c.words || []).length > 1))
+    $('planNote').textContent +=
+      ` ${pt.source} returned per-word boundaries — choose it for the word tier too.`;
+  $('run').disabled = !S.audio || !!S.running || (!wm && !pm);
+  updateTierInfo();
+}
+
+function updateTierInfo() {
+  const w = S.tracks.word, p = S.tracks.phone;
+  const any = w.items.length || p.items.length;
+  $('tierinfo').textContent = any
+    ? `${w.items.length} word intervals${w.source ? ' (' + w.source + ')' : ''} · ` +
+      `${p.items.length} phone intervals${p.source ? ' (' + p.source + ')' : ''}`
+    : 'no annotation yet — export an empty TextGrid, or run a recogniser';
+  $('dlSrt').disabled = $('dlAss').disabled = !(w.cues.length || p.cues.length);
+  $('dlTsv').disabled = !any;
+}
+
+for (const [key, id] of [['word', 'mdWord'], ['phone', 'mdPhone']]) {
+  $(id).addEventListener('change', () => {
+    const t = S.tracks[key];
+    t.model = $(id).value;
+    if (t.state === 'empty' || t.state === 'ready') t.state = t.model ? 'ready' : 'empty';
+    if (key === 'word') CFG.wordModel = t.model; else CFG.phoneModel = t.model;
+    saveCfg(); renderPlan(); drawTiers();
+  });
+}
+$('lang').value = CFG.lang; $('asrsize').value = CFG.size;
+$('lang').addEventListener('change', () => { CFG.lang = $('lang').value.trim(); saveCfg(); });
+$('asrsize').addEventListener('change', () => { CFG.size = $('asrsize').value; saveCfg(); });
+$('nameTiers').checked = CFG.nameTiers;
+$('nameTiers').addEventListener('change', () => { CFG.nameTiers = $('nameTiers').checked; saveCfg(); });
+
+/* ---------------------------------------------------------- the results */
 const MIN_IV = 0.004;   // Praat rejects zero-width intervals outright
 
 /* Force a list of intervals to be sorted, non-overlapping, strictly widening
@@ -770,27 +1506,331 @@ function tidy(items, dur) {
   return out;
 }
 
-function tiersFromCues(dur) {
-  const words = [], phones = [];
-  for (const cue of S.cues) for (const wd of (cue.words || [])) {
-    words.push({ start: wd.start, end: wd.end, text: wd.text || '' });
-    const ps = wd.phones || [], pt = wd.phone_times || [];
-    ps.forEach((ph, i) => {
-      // Fall back to an even split only when the model gave no phone times.
-      const st = pt[i] ?? (wd.start + (wd.end - wd.start) * i / Math.max(1, ps.length));
-      const en = pt[i + 1] ?? Math.max(wd.end, st + MIN_IV);
-      phones.push({ start: st, end: en, text: ph });
-    });
+function itemsFrom(cues, kind) {
+  const out = [];
+  let cueLevel = false;
+  for (const c of cues || []) {
+    const ws = c.words || [];
+    if (kind === 'word') {
+      if (ws.length) for (const w of ws) out.push({ start: +w.start, end: +w.end, text: w.text || '' });
+      else {
+        const txt = (c.plain ?? c.text ?? '').trim();
+        if (txt) { out.push({ start: +c.start, end: +c.end, text: txt }); cueLevel = true; }
+      }
+    } else {
+      for (const w of ws) {
+        const ps = w.phones || [], pt = w.phone_times || [];
+        ps.forEach((ph, i) => {
+          // Fall back to an even split only when the model gave no phone times.
+          const st = pt[i] ?? (+w.start + (+w.end - +w.start) * i / Math.max(1, ps.length));
+          const en = pt[i + 1] ?? Math.max(+w.end, st + MIN_IV);
+          out.push({ start: st, end: en, text: ph });
+        });
+      }
+    }
   }
-  return { words: tidy(words, dur), phones: tidy(phones, dur) };
+  return { items: tidy(out, S.dur || 0), cueLevel };
+}
+
+function assignTrack(key, cues, source, state) {
+  const t = S.tracks[key];
+  const { items, cueLevel } = itemsFrom(cues, key);
+  t.cues = cues; t.items = items; t.source = source; t.state = state;
+  t.note = '';
+  if (state === 'done' && !items.length)
+    t.note = key === 'phone'
+      ? 'this model returned no phone labels'
+      : 'this model returned no word timings';
+  else if (cueLevel)
+    t.note = 'cue-level intervals: the model timed segments, not words';
+  renderPlan(); renderSegments(); drawTiers(); updateTierInfo();
+}
+
+function setTrackState(key, state, note) {
+  const t = S.tracks[key];
+  t.state = state;
+  if (note !== undefined) t.note = note;
+  renderPlan(); drawTiers();
+}
+
+function mergeTranscript(cues) {
+  S.transcript = cues || [];
+  renderTranscript();
+}
+
+function renderTranscript() {
+  const el = $('transcript');
+  if (!S.transcript.length) { el.className = 'hint'; el.textContent = 'nothing yet'; return; }
+  el.className = '';
+  el.innerHTML = S.transcript.map(c => {
+    const text = (c.plain ?? (c.words || []).map(w => w.text).join(' ') ?? '').trim();
+    const ipa = (c.words || []).map(w => (w.phones || []).join('')).join(' ').trim();
+    return `<div class="cue"><span class="t">${f2(c.start)}</span>${esc(text)}` +
+           (ipa ? `<span class="ipa">${esc(ipa)}</span>` : '') + `</div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderSegments() {
+  const key = $('segWhich').value;
+  const items = S.tracks[key].items;
+  $('segCount').textContent = items.length ? `${items.length} intervals` : 'none';
+  const body = items.map((it, i) =>
+    `<tr data-i="${i}"><td>${i + 1}</td><td class="l">${esc(it.text || '')}</td>` +
+    `<td>${it.start.toFixed(3)}</td><td>${it.end.toFixed(3)}</td>` +
+    `<td>${((it.end - it.start) * 1000).toFixed(0)}</td></tr>`).join('');
+  $('segTable').tBodies[0].innerHTML = body ||
+    '<tr><td colspan="5" class="l" style="color:var(--dim2)">no intervals on this tier</td></tr>';
+}
+$('segWhich').addEventListener('change', renderSegments);
+$('segTable').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-i]');
+  if (!tr) return;
+  const it = S.tracks[$('segWhich').value].items[+tr.dataset.i];
+  if (!it) return;
+  S.sel = [it.start, it.end]; S.selectedItem = it;
+  const pad = Math.max(0.25, (it.end - it.start) * 2);
+  setWindow(it.start - pad, it.end + pad);
+  probe((it.start + it.end) / 2);
+  play(it.start, it.end);
+  for (const row of $('segTable').tBodies[0].rows) row.classList.toggle('sel', row === tr);
+});
+$('segCopy').addEventListener('click', () => {
+  const key = $('segWhich').value;
+  const tsv = 'start\tend\tduration\tlabel\n' + S.tracks[key].items
+    .map(it => `${it.start.toFixed(4)}\t${it.end.toFixed(4)}\t${(it.end - it.start).toFixed(4)}\t${it.text}`)
+    .join('\n');
+  navigator.clipboard?.writeText(tsv).then(
+    () => status(`${key} tier copied as TSV`),
+    () => status('clipboard refused — use ⬇ TSV', true));
+});
+
+/* ------------------------------------------------------------ job state */
+/* A recogniser is a shared, single-tenant resource: a long file is minutes of
+   GPU work, and a reload used to leave the page cheerfully offering Run while
+   the backend was still busy — which came back as a bare "Too many requests".
+   Poll the service instead, so the page always reflects what the backend is
+   actually doing, including jobs this tab did not start. */
+let poller = null, partialJob = null, partialSince = 0, partialCues = [];
+
+function showBusy(j) {
+  const pct = j.total > 0 ? Math.min(100, j.done / j.total * 100) : 0;
+  $('bar').hidden = false;
+  $('bar').classList.toggle('indet', !(j.total > 0));
+  $('barfill').style.width = j.total > 0 ? pct.toFixed(1) + '%' : '';
+  const where = j.total > 0 ? ` ${j.done.toFixed(1)}/${j.total.toFixed(1)} s (${pct.toFixed(0)}%)` : '';
+  status(`${j.model}: ${j.stage || 'working'}${where} — ${j.elapsed ?? 0} s`);
+  $('run').disabled = true;
+  $('stop').hidden = !NET.hasControl();
+}
+
+function showIdle(note) {
+  if (note) status(note);
+  $('bar').hidden = true; $('bar').classList.remove('indet');
+  $('stop').hidden = true;
+  renderPlan();
+}
+
+/* Cues the service has finished so far. This is the whole point of the
+   redesign: whisper yields its segments lazily and the phone pass runs per
+   segment, so on a long file there is usable annotation minutes before the
+   response exists. Waiting for the response to draw any of it was throwing
+   that away. */
+async function pullPartial(j) {
+  if (j.job != null && j.job !== partialJob) {
+    partialJob = j.job; partialSince = 0; partialCues = [];
+  }
+  if (j.cues_ready != null && j.cues_ready <= partialSince) return;
+  const p = await NET.partial(partialSince);
+  if (!p || !p.cues || !p.cues.length) return;
+  if (p.job != null && partialJob != null && p.job !== partialJob) return;
+  partialCues = partialCues.concat(p.cues);
+  partialSince = p.since + p.cues.length;
+  applyCues(partialCues, j.model || p.model || 'running', 'partial', S.running?.claims);
+}
+
+/* Route a set of cues to the tiers they can actually fill. For a job this tab
+   started, the claim is known. For a job adopted after a reload it is not, so
+   read it off the content: cues carrying phone labels fill the phone tier,
+   cues carrying word timings fill the word tier. Guessing from the model name
+   would be wrong for exactly the models that matter. */
+function applyCues(cues, source, state, claims) {
+  const hasPhones = cues.some(c => (c.words || []).some(w => (w.phones || []).length));
+  const hasWords = cues.some(c => (c.words || []).length || (c.plain ?? c.text ?? '').trim());
+  const targets = claims || [...(hasWords ? ['word'] : []), ...(hasPhones ? ['phone'] : [])];
+  for (const k of targets) {
+    if (k === 'phone' && !hasPhones && state === 'partial') continue;
+    assignTrack(k, cues, source, state);
+  }
+  const richer = cues.some(c => (c.words || []).some(w => (w.phones || []).length));
+  const already = S.transcript.some(c => (c.words || []).some(w => (w.phones || []).length));
+  if (richer || !already || !S.transcript.length) mergeTranscript(cues);
+}
+
+function stopPolling() { if (poller) { clearInterval(poller); poller = null; } }
+
+function startPolling() {
+  if (poller) return;
+  /* Do NOT stop on the first idle reading. The server only marks the job active
+     after it has read the whole upload, so a poll 700 ms after clicking Run
+     legitimately sees active:false — treating that as "finished" used to kill
+     the poller instantly and re-enable Run, which is the bug this whole panel
+     exists to prevent. Require two consecutive idle ticks, and never stop at
+     all while one of our own requests is still outstanding. */
+  let idleTicks = 0;
+  poller = setInterval(async () => {
+    const j = await NET.progress();
+    if (!j) return;
+    if (j.active) {
+      idleTicks = 0;
+      showBusy(j);
+      await pullPartial(j);
+      return;
+    }
+    if (j.cues_ready) await pullPartial(j);
+    idleTicks++;
+    if (S.running || idleTicks < 2) return;
+    stopPolling();
+    showIdle(S.audio ? 'idle' : 'idle — choose an audio file');
+  }, 700);
+}
+
+$('stop').addEventListener('click', async () => {
+  $('stop').disabled = true;
+  S.aborted = true;
+  try { await NET.cancel(); status('cancelling…'); }
+  catch (e) { status('cancel failed: ' + e.message, true); }
+  finally { $('stop').disabled = false; }
+});
+
+/* --------------------------------------------------------------- the run */
+function sizeApplies(model) {
+  return ['ipa', 'ipa-buckeye', 'whisper'].includes(model);
+}
+
+function buildJobs(only) {
+  const w = S.tracks.word.model, p = S.tracks.phone.model;
+  if (only === 'word') return w ? [{ model: w, claims: ['word'] }] : [];
+  if (only === 'phone') return p ? [{ model: p, claims: ['phone'] }] : [];
+  // One model that fills both tiers is one job, not two identical uploads.
+  if (w && p && w === p) return [{ model: w, claims: ['word', 'phone'] }];
+  const out = [];
+  if (w) out.push({ model: w, claims: ['word'] });
+  if (p) out.push({ model: p, claims: ['phone'] });
+  return out;
+}
+
+async function runJob(job) {
+  const f = $('file').files[0];
+  if (!f) throw new Error('no audio file');
+  S.running = job;
+  partialJob = null; partialSince = 0; partialCues = [];
+  for (const k of job.claims) setTrackState(k, 'running', '');
+  startPolling();
+
+  const fd = new FormData();
+  fd.append('file', f, f.name);
+  fd.append('model', job.model);
+  fd.append('response_format', 'verbose_json');
+  if (NET.mode === 'broker' && NET.provider) fd.append('provider', NET.provider.id);
+  const lang = $('lang').value.trim();
+  if (lang) fd.append('language', lang);
+  if ($('asrsize').value && sizeApplies(job.model)) fd.append('asr_model', $('asrsize').value);
+
+  const t0 = performance.now();
+  try {
+    const r = await fetch(NET.transcribeUrl(), { method: 'POST', body: fd });
+    if (r.status === 429) {
+      // One GPU, one job. Say what is actually running rather than relaying
+      // whatever generic rate-limit text came back.
+      const j = await NET.progress();
+      throw new Error(j && j.active
+        ? `busy: ${j.model} is running (${j.stage || 'working'}, ${j.elapsed ?? 0} s). Press Stop, or wait.`
+        : 'the recogniser is busy with another request — try again in a moment.');
+    }
+    if (r.status === 409) throw new Error('cancelled');
+    if ([404, 405, 501].includes(r.status)) throw new Error(
+      'no recogniser at ' + (NET.mode === 'broker' ? 'this server' : (CFG.asrBase || 'this origin')) +
+      ' — set one up under ⚙ Connection. The analysis and the TextGrid export do not need one.');
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+
+    const cues = body.cues || [];
+    for (const k of job.claims) assignTrack(k, cues, job.model, 'done');
+    applyCues(cues, job.model, 'done', job.claims);
+    if (!cues.length && (body.text || '').trim()) {
+      mergeTranscript([{ start: 0, end: S.dur, plain: body.text.trim() }]);
+      for (const k of job.claims)
+        setTrackState(k, 'done', 'the model returned text with no timings, so no tier could be drawn');
+    }
+    status(`${job.model} finished in ${f2((performance.now() - t0) / 1000)} s` +
+           (body.language ? ` · language ${body.language}` : ''));
+  } catch (e) {
+    const cancelled = /cancel/i.test(e.message);
+    for (const k of job.claims)
+      setTrackState(k, cancelled ? 'cancelled' : 'failed', e.message);
+    status((cancelled ? 'cancelled: ' : `${job.model} failed: `) + e.message, !cancelled);
+    if (cancelled) S.aborted = true;
+  } finally {
+    S.running = null;
+  }
+}
+
+async function runPlan(only) {
+  if (S.running) { status('a job is already running', true); return; }
+  const jobs = buildJobs(only);
+  if (!jobs.length) { status('choose a model for at least one tier', true); return; }
+  S.aborted = false;
+  for (const job of jobs) for (const k of job.claims) setTrackState(k, 'queued', '');
+  for (const job of jobs) {
+    if (S.aborted) { for (const k of job.claims) setTrackState(k, 'cancelled'); continue; }
+    await runJob(job);
+  }
+  const j = await NET.progress();
+  if (!j || !j.active) { stopPolling(); showIdle(); }
+  renderPlan();
+}
+
+$('run').addEventListener('click', () => runPlan());
+$('reWord').addEventListener('click', () => runPlan('word'));
+$('rePhone').addEventListener('click', () => runPlan('phone'));
+
+/* --------------------------------------------------------------- settings */
+function openSettings(open) { $('settings').hidden = !open; }
+$('gear').addEventListener('click', () => openSettings($('settings').hidden));
+$('gearclose').addEventListener('click', () => openSettings(false));
+$('asrbase').value = CFG.asrBase; $('ctrlbase').value = CFG.ctrlBase;
+
+for (const id of ['modeBroker', 'modeDirect'])
+  $(id).addEventListener('change', async () => {
+    CFG.mode = $('modeBroker').checked ? 'broker' : 'direct';
+    saveCfg(); await NET.discover();
+  });
+$('provider').addEventListener('change', async () => {
+  CFG.provider = $('provider').value; saveCfg(); await NET.discover();
+});
+$('providerRefresh').addEventListener('click', () => NET.discover());
+$('asrbase').addEventListener('change', async () => {
+  CFG.asrBase = $('asrbase').value.trim(); saveCfg(); NET.controlOk = true; await NET.loadModels();
+});
+$('ctrlbase').addEventListener('change', async () => {
+  CFG.ctrlBase = $('ctrlbase').value.trim(); saveCfg(); NET.controlOk = true; await NET.loadModels();
+});
+$('asrtest').addEventListener('click', () => NET.loadModels());
+
+/* --------------------------------------------------------------- exports */
+function download(name, text, type = 'text/plain') {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: type + ';charset=utf-8' }));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
 }
 
 /* Praat's TextGrid text format, written directly as UTF-8. Praat's own writer
    emits UTF-16 (the 0xFE 0xFF BOM), which round-trips through the wasm FS as
    mojibake; the format is simple enough that emitting it here avoids the whole
-   encoding problem and Praat reads UTF-8 TextGrids fine. */
+   encoding problem, and Praat reads UTF-8 TextGrids fine. ELAN imports the same
+   file through File > Import > Praat TextGrid File. */
 function toTextGrid(dur) {
-  const { words, phones } = tiersFromCues(dur);
   const fill = items => {
     const out = []; let t = 0;
     for (const it of items) {
@@ -801,40 +1841,55 @@ function toTextGrid(dur) {
     else if (out.length) out[out.length - 1].end = dur;
     return out;
   };
-  const esc = s => String(s).replace(/"/g, '""');
+  const escq = s => String(s).replace(/"/g, '""');
   const tier = (name, items) => {
     const iv = fill(items);
-    let s = `        class = "IntervalTier"\n        name = "${name}"\n`;
+    let s = `        class = "IntervalTier"\n        name = "${escq(name)}"\n`;
     s += `        xmin = 0\n        xmax = ${dur}\n        intervals: size = ${iv.length}\n`;
     iv.forEach((it, i) => {
       s += `        intervals [${i + 1}]:\n            xmin = ${it.start}\n`;
-      s += `            xmax = ${it.end}\n            text = "${esc(it.text)}"\n`;
+      s += `            xmax = ${it.end}\n            text = "${escq(it.text)}"\n`;
     });
     return s;
   };
+  const nm = (base, track) =>
+    CFG.nameTiers && track.source ? `${base} (${track.source})` : base;
   let out = 'File type = "ooTextFile"\nObject class = "TextGrid"\n\n';
   out += `xmin = 0\nxmax = ${dur}\ntiers? <exists>\nsize = 2\nitem []:\n`;
-  out += `    item [1]:\n${tier('words', words)}`;
-  out += `    item [2]:\n${tier('phones', phones)}`;
+  out += `    item [1]:\n${tier(nm('words', S.tracks.word), S.tracks.word.items)}`;
+  out += `    item [2]:\n${tier(nm('phones', S.tracks.phone), S.tracks.phone.items)}`;
   return out;
 }
 
-const ts = (s, comma=true) => {
+const ts = (s, comma = true) => {
   const ms = Math.max(0, Math.round(s * 1000));
   const h = String(Math.floor(ms / 3600000)).padStart(2, '0');
   const m = String(Math.floor(ms / 60000) % 60).padStart(2, '0');
   const sec = String(Math.floor(ms / 1000) % 60).padStart(2, '0');
   const mil = String(ms % 1000).padStart(3, '0');
-  return comma ? `${h}:${m}:${sec},${mil}` : `${h}:${m}:${sec}.${mil.slice(0,2)}`;
+  return comma ? `${h}:${m}:${sec},${mil}` : `${h}:${m}:${sec}.${mil.slice(0, 2)}`;
 };
 
+const subtitleCues = () =>
+  (S.tracks.phone.cues.length ? S.tracks.phone.cues : S.tracks.word.cues) || [];
+
 $('dlTextGrid').addEventListener('click', () =>
-  download(S.name + '.TextGrid', toTextGrid(S.audio?.duration || 0)));
+  download(S.name + '.TextGrid', toTextGrid(S.dur || 0)));
+
+$('dlTsv').addEventListener('click', () => {
+  const rows = ['tier\tstart\tend\tduration\tlabel'];
+  for (const k of ['word', 'phone'])
+    for (const it of S.tracks[k].items)
+      rows.push(`${k}\t${it.start.toFixed(4)}\t${it.end.toFixed(4)}\t` +
+                `${(it.end - it.start).toFixed(4)}\t${it.text}`);
+  download(S.name + '.intervals.tsv', rows.join('\n'), 'text/tab-separated-values');
+});
 
 $('dlSrt').addEventListener('click', () => {
-  const body = S.cues.map((c, i) => {
+  const body = subtitleCues().map((c, i) => {
     const ipa = (c.words || []).map(w => (w.phones || []).join('')).join(' ').trim();
-    return `${i + 1}\n${ts(c.start)} --> ${ts(c.end)}\n${ipa || (c.words || []).map(w => w.text).join(' ')}\n`;
+    const text = (c.plain ?? (c.words || []).map(w => w.text).join(' ')).trim();
+    return `${i + 1}\n${ts(c.start)} --> ${ts(c.end)}\n${ipa || text}\n`;
   }).join('\n');
   download(S.name + '.ipa.srt', body);
 });
@@ -846,19 +1901,35 @@ $('dlAss').addEventListener('click', () => {
     `[Events]\nFormat: Layer, Start, End, Style, Text\n`;
   /* NBSP padding + WrapStyle 2 + a monospace font are all required for the
      interlinear columns to survive libass — ordinary spaces get trimmed. */
-  const body = S.cues.map(c => {
+  const body = subtitleCues().map(c => {
     const pairs = (c.words || []).map(w => [w.text || '', (w.phones || []).join('')]);
     const top = [], bot = [];
     for (const [t, p] of pairs) {
       const width = Math.max([...t].length, [...p].length);
-      top.push(t.padEnd(width, ' ')); bot.push(p.padEnd(width, ' '));
+      top.push(t.padEnd(width, ' ')); bot.push(p.padEnd(width, ' '));
     }
-    return `Dialogue: 0,${ts(c.start,false)},${ts(c.end,false)},ipa,${top.join(' ')}\\N${bot.join(' ')}`;
+    return `Dialogue: 0,${ts(c.start, false)},${ts(c.end, false)},ipa,${top.join(' ')}\\N${bot.join(' ')}`;
   }).join('\n');
   download(S.name + '.ipa.ass', head + body);
 });
 
-addEventListener('resize', () => { drawWave(); drawSpec(); drawTiers(); });
+/* ------------------------------------------------------------------ boot */
+addEventListener('resize', () => drawAll());
+drawAll();
+renderPlan();
+
+(async () => {
+  await NET.discover();
+  if (!NET.models.length && NET.mode === 'broker')
+    status('no recogniser configured — analysis and TextGrid export still work (⚙ Connection)');
+  // Adopt whatever the backend is already doing. Without this a reload during a
+  // long job shows an enabled Run button that can only fail.
+  const j = await NET.progress();
+  if (j && (j.active || j.cues_ready)) {
+    if (j.active) { showBusy(j); startPolling(); }
+    await pullPartial(j);
+  }
+})();
 </script>
 </body>
 </html>

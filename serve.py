@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Serve praat-web, fetching the praat-wasm package on first run.
 
     python3 serve.py                 # http://127.0.0.1:8710

@@ -556,6 +556,7 @@ $('file').addEventListener('change', async ev => {
   renderPlan(); renderSegments(); renderTranscript();
   drawAll();
   await analyse();
+  adoptRunningJob();
 });
 
 function encodeWav(buf) {
@@ -1922,14 +1923,25 @@ renderPlan();
   await NET.discover();
   if (!NET.models.length && NET.mode === 'broker')
     status('no recogniser configured — analysis and TextGrid export still work (⚙ Connection)');
-  // Adopt whatever the backend is already doing. Without this a reload during a
-  // long job shows an enabled Run button that can only fail.
-  const j = await NET.progress();
-  if (j && (j.active || j.cues_ready)) {
-    if (j.active) { showBusy(j); startPolling(); }
-    await pullPartial(j);
-  }
 })();
+
+/* Adopt whatever the backend is already doing, so a reload during a long job
+   shows the progress and the annotation rather than a Run button that can only
+   fail. Deliberately NOT done on load: asking a gateway for the recogniser's
+   progress makes it start the recogniser, and a gateway that arbitrates one GPU
+   will unload whatever else was using it. Merely opening a spectrogram must not
+   evict somebody's language model. A `File` cannot survive a reload anyway, so
+   the first moment adopting is useful is the moment the audio is back. */
+async function adoptRunningJob() {
+  // Same reasoning one step further: if no tier has a model assigned, this
+  // session is not going to run one, and asking would start a service for
+  // nothing.
+  if (!S.tracks.word.model && !S.tracks.phone.model) return;
+  const j = await NET.progress();
+  if (!j) return;
+  if (j.active) { showBusy(j); startPolling(); }
+  if (j.active || j.cues_ready) await pullPartial(j);
+}
 </script>
 </body>
 </html>

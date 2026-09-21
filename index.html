@@ -324,7 +324,7 @@
 <div class="col">
 
   <div class="pane">
-    <h2>Recognition <span class="sub">one tier per model, run in order</span></h2>
+    <h2>Recognition <span class="sub">one tier per model</span></h2>
     <div class="track" data-track="word">
       <div class="top">
         <span class="name">Word tier</span>
@@ -352,6 +352,26 @@
                title="Language code for this model. ISO 639-1 for whisper, 639-3 for mms and owsm. Blank lets the model decide.">
       </div>
       <div class="meta" id="mtPhone">IPA read off the acoustics, with CTC spike times</div>
+    </div>
+    <div class="track" data-track="speaker" id="trkSpeaker" hidden>
+      <div class="top">
+        <span class="name">Speaker tier</span>
+        <span class="sp"></span>
+        <span class="state" id="stSpeaker" data-s="empty">no model</span>
+        <button class="tiny" id="reSpeaker" title="Run this tier only">⟲</button>
+      </div>
+      <div class="row tight" style="padding:5px 0 0;border:0">
+        <select id="mdSpeaker"><option value="">(none)</option></select>
+      </div>
+      <div class="row tight" style="padding:4px 0 0;border:0">
+        <label for="spkN">speakers</label>
+        <input id="spkN" size="3" class="num" placeholder="auto"
+               title="How many speakers to find. Blank lets the clustering decide from the threshold; a number forces exactly that many, which is what you want whenever you know the recording.">
+        <label for="spkTh">threshold</label>
+        <input id="spkTh" size="4" class="num" value="0.7"
+               title="Clustering threshold, used only when the count is blank. Smaller splits more. This argument decides the answer: on one ten-minute recording 0.5 gave sixteen speakers and 1.1 gave two.">
+      </div>
+      <div class="meta" id="mtSpeaker">who is talking, by voice</div>
     </div>
     <div class="row tight">
       <label>whisper size</label>
@@ -402,7 +422,7 @@
   <div class="pane">
     <h2>Segments
       <select id="segWhich" class="tiny num" style="padding:1px 5px">
-        <option value="phone">phones</option><option value="word">words</option>
+        <option value="phone">phones</option><option value="word">words</option><option value="speaker">speakers</option>
       </select>
       <span class="sub" id="segCount">—</span>
       <span class="sp"></span>
@@ -494,7 +514,8 @@ const CFG = {
   provider: '',
   asrBase: '',               // '' = same origin
   ctrlBase: '/upstream/asr',
-  wordModel: '', phoneModel: '',
+  wordModel: '', phoneModel: '', speakerModel: '',
+  spkCount: '', spkThreshold: '0.7',
   langWord: '', langPhone: '', size: 'medium', nameTiers: false,
   theme: 'graphite',
 };
@@ -507,6 +528,7 @@ try { Object.assign(CFG, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } c
   if (q.has('provider')) { CFG.provider = q.get('provider'); CFG.mode = 'broker'; }
   if (q.has('words')) CFG.wordModel = q.get('words');
   if (q.has('phones')) CFG.phoneModel = q.get('phones');
+  if (q.has('speakers')) CFG.speakerModel = q.get('speakers');
   if (q.has('lang')) CFG.langWord = CFG.langPhone = q.get('lang');
   if (q.has('theme')) CFG.theme = q.get('theme');
 }
@@ -533,6 +555,45 @@ function newTrack(role, label) {
   return { role, label, model: '', provider: '', state: 'empty', note: '',
            cues: [], items: [], source: '', fromJob: null };
 }
+
+/* One row per tier, and the only place that knows a tier exists. Everything
+   that used to say ['word','phone'] reads this instead, so a fourth tier is a
+   table entry rather than a hunt through fourteen call sites.
+
+   `concurrent` marks a tier whose model holds no GPU: diarization runs through
+   onnxruntime on the CPU, so it does not queue behind the recogniser, it runs
+   beside it. `optional` keeps the row and the lane out of sight until a model
+   that could fill them actually exists, so a setup with no diarizer looks
+   exactly as it did before this tier was added. */
+const TIERS = [
+  { key: 'word',    role: 'words',    label: 'words',
+    sel: 'mdWord',    st: 'stWord',    mt: 'mtWord',    rerun: 'reWord',
+    lang: 'lngWord',  cfg: 'wordModel',
+    gist: 'orthographic transcription' },
+  { key: 'phone',   role: 'phones',   label: 'phones',
+    sel: 'mdPhone',   st: 'stPhone',   mt: 'mtPhone',   rerun: 'rePhone',
+    lang: 'lngPhone', cfg: 'phoneModel',
+    gist: 'IPA read off the acoustics' },
+  { key: 'speaker', role: 'speakers', label: 'speakers',
+    sel: 'mdSpeaker', st: 'stSpeaker', mt: 'mtSpeaker', rerun: 'reSpeaker',
+    row: 'trkSpeaker', cfg: 'speakerModel', optional: true, concurrent: true,
+    gist: 'who is talking, by voice' },
+];
+const TKEYS = TIERS.map(t => t.key);
+const tierOf = k => TIERS.find(t => t.key === k);
+
+/* Tiers worth showing: the always-on ones, plus any optional tier that has a
+   model chosen, has intervals already, or has a model available to choose. */
+function shownTiers() {
+  return TIERS.filter(t => !t.optional || S.tracks[t.key].model ||
+                           S.tracks[t.key].items.length ||
+                           NET.models.some(m => m.role === t.role));
+}
+
+/* The clusterer's speaker numbers are zero-based and arbitrary until the
+   service renumbers them by order of first appearance; S1, S2, S3 is what
+   Praat, ELAN and CLAN all mean by a speaker label. */
+const spkName = n => 'S' + (Number(n) + 1);
 const S = {
   praat: null, sound: null, audio: null, ctx: null, src: null,
   name: 'audio', dur: 0,
@@ -540,11 +601,12 @@ const S = {
   sel: null,            // [a, b] selection inside the window, or null
   cursor: null,         // last probed time
   analysis: null,       // {spec, pitch, formants, intensity, t0, t1, params}
-  tracks: { word: newTrack('words', 'words'), phone: newTrack('phones', 'phones') },
+  tracks: {},   // filled from TIERS below
   transcript: [],       // cues for the text panel, whichever model produced them
-  queue: [], running: null,
+  queue: [], running: null, side: null, sideAbort: null,
   lastReadout: {},
 };
+for (const t of TIERS) S.tracks[t.key] = newTrack(t.role, t.label);
 
 /* praat-wasm is Praat itself compiled to WASM (GPL-3.0). It runs in a Worker
    because a 10 s window costs ~2.7 s of DSP — on the main thread that is a
@@ -1138,10 +1200,7 @@ function drawTiers() {
   const { g, x0, y0, y1, iw } = F;
   const [t0, t1] = S.win, span = t1 - t0 || 1;
   const xOf = t => x0 + (t - t0) / span * iw;
-  const lanes = [
-    { key: 'word', label: 'words' },
-    { key: 'phone', label: 'phones' },
-  ];
+  const lanes = shownTiers();
   const lh = (y1 - y0) / lanes.length;
   const mono = C.mono;
 
@@ -1186,7 +1245,9 @@ function drawTiers() {
     }
 
     g.textAlign = 'center';
-    g.font = (lane.key === 'phone' ? '13px ' + mono : '12px ui-sans-serif');
+    g.font = lane.key === 'phone' ? '13px ' + mono
+           : lane.key === 'speaker' ? '11px ' + mono
+           : '12px ui-sans-serif';
     for (const it of t.items) {
       if (it.end < t0 || it.start > t1) continue;
       const a = Math.max(x0, xOf(it.start)), b = Math.min(F.x1, xOf(it.end));
@@ -1217,7 +1278,7 @@ function drawTiers() {
 }
 
 function anyBusy() {
-  return ['word', 'phone'].some(k => ['queued', 'running', 'partial'].includes(S.tracks[k].state));
+  return TKEYS.some(k => ['queued', 'running', 'partial'].includes(S.tracks[k].state));
 }
 function tickHatch() {
   if (!anyBusy()) { hatchTimer = null; return; }
@@ -1323,7 +1384,13 @@ $('spec').addEventListener('pointerdown', e => { probe(xToTime(e, S.win[0], S.wi
 $('tiers').addEventListener('pointerdown', e => {
   const t = xToTime(e, S.win[0], S.win[1]);
   const r = e.currentTarget.getBoundingClientRect();
-  const key = (e.clientY - r.top) < r.height / 2 ? 'word' : 'phone';
+  // Same lane geometry drawTiers uses, padding included, or a click near a
+  // boundary picks the neighbouring tier once there are three of them.
+  const lanes = shownTiers();
+  const lh = (r.height - PAD.t - PAD.b) / lanes.length;
+  const idx = Math.max(0, Math.min(lanes.length - 1,
+                       Math.floor((e.clientY - r.top - PAD.t) / lh)));
+  const key = lanes[idx].key;
   const hit = S.tracks[key].items.find(it => it.start <= t && t <= it.end);
   if (hit) { S.sel = [hit.start, hit.end]; S.selectedItem = hit; $('segWhich').value = key; renderSegments(); }
   probe(t); drawAll();
@@ -1513,23 +1580,29 @@ function renderConnection() {
 }
 
 function fillModelSelects() {
-  for (const [key, id] of [['word', 'mdWord'], ['phone', 'mdPhone']]) {
-    const want = key === 'word' ? 'words' : 'phones';
-    const el = $(id), cur = S.tracks[key].model || (key === 'word' ? CFG.wordModel : CFG.phoneModel);
-    el.innerHTML = '<option value="">(none)</option>' + NET.models.map(m => {
-      const fits = m.role === 'both' || m.role === want;
+  for (const t of TIERS) {
+    const el = $(t.sel), cur = S.tracks[t.key].model || CFG[t.cfg];
+    /* A speakers model cannot fill a word tier and a recogniser cannot fill a
+       speaker tier, so the speaker select offers only what could work. The
+       other two keep listing everything, because the response is believed over
+       the provider's role hint and a model often returns more than it claims. */
+    const pool = t.optional ? NET.models.filter(m => m.role === t.role) : NET.models;
+    el.innerHTML = '<option value="">(none)</option>' + pool.map(m => {
+      const fits = m.role === 'both' || m.role === t.role;
       return `<option value="${esc(m.id)}">${esc(m.label)}${fits ? '' : ' — ' + m.role + ' only'}</option>`;
     }).join('');
-    el.value = NET.models.some(m => m.id === cur) ? cur : '';
-    S.tracks[key].model = el.value;
+    el.value = pool.some(m => m.id === cur) ? cur : '';
+    S.tracks[t.key].model = el.value;
   }
   renderPlan();
 }
 
 /* ------------------------------------------------------------- the plan */
 function renderPlan() {
-  for (const [key, st, mt] of [['word', 'stWord', 'mtWord'], ['phone', 'stPhone', 'mtPhone']]) {
-    const t = S.tracks[key], el = $(st);
+  const shown = shownTiers();
+  for (const T of TIERS) {
+    if (T.row) $(T.row).hidden = !shown.includes(T);
+    const key = T.key, t = S.tracks[key], el = $(T.st);
     el.dataset.s = t.state;
     const n = t.items.length;
     const spin = (t.state === 'running' || t.state === 'partial') ? '<i class="spin"></i>' : '';
@@ -1537,19 +1610,24 @@ function renderPlan() {
       empty: 'no model', ready: 'ready', queued: 'queued', running: 'reading<span class="dots"></span>',
       partial: `${n} so far`, done: `${n} intervals`, failed: 'failed', cancelled: 'cancelled',
     }[t.state] || t.state);
-    const bits = [];
-    bits.push(key === 'word' ? 'orthographic transcription' : 'IPA read off the acoustics');
+    const bits = [T.gist];
     if (t.source) bits.push('from ' + t.source);
     if (t.note) bits.push(t.note);
-    $(mt).textContent = bits.join(' · ');
+    $(T.mt).textContent = bits.join(' · ');
   }
-  const wm = S.tracks.word.model, pm = S.tracks.phone.model;
-  $('planNote').textContent = !wm && !pm
+  const wm = S.tracks.word.model, pm = S.tracks.phone.model, sm = S.tracks.speaker.model;
+  $('planNote').textContent = !wm && !pm && !sm
     ? 'No model chosen. Everything except recognition works without one, including an empty TextGrid to annotate by hand.'
     : (wm && wm === pm)
       ? `${wm} fills both tiers in one pass, so it runs once.`
       : wm && pm ? `${wm} runs first and fills the word tier; ${pm} follows for the phone tier.`
-      : `Only the ${wm ? 'word' : 'phone'} tier will be filled.`;
+      : wm || pm ? `Only the ${wm ? 'word' : 'phone'} tier will be filled${sm ? ', beside the speaker tier' : ''}.`
+      : 'Only the speaker tier will be filled: turns and their boundaries, with nothing said in them.';
+  /* Worth saying out loud, because it is the one thing here that does not
+     queue: the diarizer holds no GPU, so it starts at the same moment the
+     recogniser does rather than after it. */
+  if (sm && (wm || pm))
+    $('planNote').textContent += ` ${sm} holds no GPU, so it runs alongside rather than waiting its turn.`;
   /* A model chosen for the phone tier often returns word boundaries too. If
      the word tier ended up with one interval per segment while the phone model
      had per-word timings, that is worth saying: the better annotation is
@@ -1559,30 +1637,41 @@ function renderPlan() {
       pt.cues.some(c => (c.words || []).length > 1))
     $('planNote').textContent +=
       ` ${pt.source} returned per-word boundaries — choose it for the word tier too.`;
-  $('run').disabled = !S.audio || !!S.running || (!wm && !pm);
+  $('run').disabled = !S.audio || !!S.running || !!S.side || (!wm && !pm && !sm);
   updateTierInfo();
 }
 
 function updateTierInfo() {
-  const w = S.tracks.word, p = S.tracks.phone;
-  const any = w.items.length || p.items.length;
-  $('tierinfo').textContent = any
-    ? `${w.items.length} word intervals${w.source ? ' (' + w.source + ')' : ''} · ` +
-      `${p.items.length} phone intervals${p.source ? ' (' + p.source + ')' : ''}`
+  const parts = [];
+  for (const T of TIERS) {
+    const t = S.tracks[T.key];
+    if (T.optional && !t.items.length) continue;
+    const n = t.items.length;
+    parts.push(`${n} ${T.key} interval${n === 1 ? '' : 's'}` +
+               (t.source ? ` (${t.source})` : ''));
+  }
+  const any = TKEYS.some(k => S.tracks[k].items.length);
+  const spk = new Set(S.tracks.speaker.items.map(it => it.text)).size;
+  if (spk) parts.push(spk === 1 ? 'one voice' : `${spk} voices`);
+  $('tierinfo').textContent = any ? parts.join(' · ')
     : 'no annotation yet — export an empty TextGrid, or run a recogniser';
-  $('dlSrt').disabled = $('dlAss').disabled = !(w.cues.length || p.cues.length);
+  $('dlSrt').disabled = $('dlAss').disabled =
+    !(S.tracks.word.cues.length || S.tracks.phone.cues.length);
   $('dlTsv').disabled = !any;
 }
 
-for (const [key, id] of [['word', 'mdWord'], ['phone', 'mdPhone']]) {
-  $(id).addEventListener('change', () => {
-    const t = S.tracks[key];
-    t.model = $(id).value;
+for (const T of TIERS) {
+  $(T.sel).addEventListener('change', () => {
+    const t = S.tracks[T.key];
+    t.model = $(T.sel).value;
     if (t.state === 'empty' || t.state === 'ready') t.state = t.model ? 'ready' : 'empty';
-    if (key === 'word') CFG.wordModel = t.model; else CFG.phoneModel = t.model;
+    CFG[T.cfg] = t.model;
     saveCfg(); renderPlan(); drawTiers();
   });
 }
+$('spkN').value = CFG.spkCount; $('spkTh').value = CFG.spkThreshold;
+$('spkN').addEventListener('change', () => { CFG.spkCount = $('spkN').value.trim(); saveCfg(); });
+$('spkTh').addEventListener('change', () => { CFG.spkThreshold = $('spkTh').value.trim(); saveCfg(); });
 $('lngWord').value = CFG.langWord; $('lngPhone').value = CFG.langPhone;
 $('asrsize').value = CFG.size;
 $('lngWord').addEventListener('change', () => { CFG.langWord = $('lngWord').value.trim(); saveCfg(); });
@@ -1625,7 +1714,12 @@ function itemsFrom(cues, kind) {
   let cueLevel = false;
   for (const c of cues || []) {
     const ws = c.words || [];
-    if (kind === 'word') {
+    if (kind === 'speaker') {
+      // A turn is already an interval. There is no text to split and nothing
+      // to align: the label is the speaker, and the boundaries are the answer.
+      if (c.speaker != null)
+        out.push({ start: +c.start, end: +c.end, text: spkName(c.speaker) });
+    } else if (kind === 'word') {
       if (ws.length) for (const w of ws) out.push({ start: +w.start, end: +w.end, text: w.text || '' });
       else {
         const txt = (c.plain ?? c.text ?? '').trim();
@@ -1652,9 +1746,9 @@ function assignTrack(key, cues, source, state) {
   t.cues = cues; t.items = items; t.source = source; t.state = state;
   t.note = '';
   if (state === 'done' && !items.length)
-    t.note = key === 'phone'
-      ? 'this model returned no phone labels'
-      : 'this model returned no word timings';
+    t.note = { phone: 'this model returned no phone labels',
+               word: 'this model returned no word timings',
+               speaker: 'this model found no speech to attribute' }[key] || '';
   else if (cueLevel)
     t.note = 'cue-level intervals: the model timed segments, not words';
   renderPlan(); renderSegments(); drawTiers(); updateTierInfo();
@@ -1771,7 +1865,9 @@ async function pullPartial(j) {
 function applyCues(cues, source, state, claims) {
   const hasPhones = cues.some(c => (c.words || []).some(w => (w.phones || []).length));
   const hasWords = cues.some(c => (c.words || []).length || (c.plain ?? c.text ?? '').trim());
-  const targets = claims || [...(hasWords ? ['word'] : []), ...(hasPhones ? ['phone'] : [])];
+  const hasSpeakers = cues.some(c => c.speaker != null);
+  const targets = claims || [...(hasWords ? ['word'] : []), ...(hasPhones ? ['phone'] : []),
+                             ...(hasSpeakers ? ['speaker'] : [])];
   for (const k of targets) {
     if (k === 'phone' && !hasPhones && state === 'partial') continue;
     /* A finished tier is never replaced by a partial one. The poller awaits its
@@ -1781,6 +1877,10 @@ function applyCues(cues, source, state, claims) {
     if (state === 'partial' && S.tracks[k].state === 'done') continue;
     assignTrack(k, cues, claims ? source : source + ' (adopted)', state);
   }
+  /* Speaker turns carry no text. Letting them reach the transcript would wipe
+     a perfectly good transcription with a list of blank cues, and the first
+     run on a fresh file is exactly when S.transcript is empty. */
+  if (!hasWords && !hasPhones) return;
   const richer = cues.some(c => (c.words || []).some(w => (w.phones || []).length));
   const already = S.transcript.some(c => (c.words || []).some(w => (w.phones || []).length));
   if (richer || !already || !S.transcript.length) mergeTranscript(cues);
@@ -1817,6 +1917,9 @@ function startPolling() {
 $('stop').addEventListener('click', async () => {
   $('stop').disabled = true;
   S.aborted = true;
+  /* The diarizer honours /cancel only at the end of its current pass, so drop
+     the connection as well. The service releases its lock either way. */
+  if (S.sideAbort) try { S.sideAbort.abort(); } catch {}
   try { await NET.cancel(); status('cancelling…'); }
   catch (e) { status('cancel failed: ' + e.message, true); }
   finally { $('stop').disabled = false; }
@@ -1828,37 +1931,52 @@ function sizeApplies(model) {
 }
 
 function buildJobs(only) {
-  const w = S.tracks.word.model, p = S.tracks.phone.model;
-  if (only === 'word') return w ? [{ model: w, claims: ['word'] }] : [];
-  if (only === 'phone') return p ? [{ model: p, claims: ['phone'] }] : [];
-  // One model that fills both tiers is one job, not two identical uploads.
-  if (w && p && w === p) return [{ model: w, claims: ['word', 'phone'] }];
-  const out = [];
-  if (w) out.push({ model: w, claims: ['word'] });
-  if (p) out.push({ model: p, claims: ['phone'] });
+  const want = only ? [only] : TKEYS;
+  const out = [], gpu = [];
+  for (const k of want) {
+    const model = S.tracks[k].model;
+    if (!model) continue;
+    if (tierOf(k).concurrent) out.push({ model, claims: [k], concurrent: true });
+    else gpu.push({ k, model });
+  }
+  // One model that fills two tiers is one job, not two identical uploads.
+  if (gpu.length === 2 && gpu[0].model === gpu[1].model)
+    out.push({ model: gpu[0].model, claims: gpu.map(g => g.k) });
+  else for (const g of gpu) out.push({ model: g.model, claims: [g.k] });
   return out;
 }
 
 async function runJob(job) {
   const f = $('file').files[0];
   if (!f) throw new Error('no audio file');
-  S.running = job;
-  partialJob = null; partialSince = 0; partialCues = [];
+  /* Two slots, not one. A concurrent job holds no GPU, so it must not block
+     the recogniser chain and must not be blocked by it; keeping it out of
+     S.running is what lets both be in flight at once. */
+  if (job.concurrent) { S.side = job; S.sideAbort = new AbortController(); }
+  else { S.running = job; partialJob = null; partialSince = 0; partialCues = []; }
   for (const k of job.claims) setTrackState(k, 'running', '');
-  startPolling();
+  if (!job.concurrent) startPolling();
 
   const fd = new FormData();
   fd.append('file', f, f.name);
   fd.append('model', job.model);
   fd.append('response_format', 'verbose_json');
   if (NET.mode === 'broker' && NET.provider) fd.append('provider', NET.provider.id);
-  const lang = (job.claims.includes('word') ? $('lngWord').value : $('lngPhone').value).trim();
-  if (lang) fd.append('language', lang);
-  if ($('asrsize').value && sizeApplies(job.model)) fd.append('asr_model', $('asrsize').value);
+  if (job.concurrent) {
+    // Diarization takes no language: a speaker embedding keys on the voice.
+    const n = $('spkN').value.trim(), th = $('spkTh').value.trim();
+    if (n) fd.append('speakers', n);
+    if (th) fd.append('threshold', th);
+  } else {
+    const lang = (job.claims.includes('word') ? $('lngWord').value : $('lngPhone').value).trim();
+    if (lang) fd.append('language', lang);
+    if ($('asrsize').value && sizeApplies(job.model)) fd.append('asr_model', $('asrsize').value);
+  }
 
   const t0 = performance.now();
   try {
-    const r = await fetch(NET.transcribeUrl(), { method: 'POST', body: fd });
+    const r = await fetch(NET.transcribeUrl(), { method: 'POST', body: fd,
+                                                 signal: job.concurrent ? S.sideAbort.signal : undefined });
     if (r.status === 429) {
       // One GPU, one job. Say what is actually running rather than relaying
       // whatever generic rate-limit text came back.
@@ -1882,28 +2000,38 @@ async function runJob(job) {
         setTrackState(k, 'done', 'the model returned text with no timings, so no tier could be drawn');
     }
     status(`${job.model} finished in ${f2((performance.now() - t0) / 1000)} s` +
-           (body.language ? ` · language ${body.language}` : ''));
+           (body.language ? ` · language ${body.language}` : '') +
+           (body.speakers != null ? ` · ${body.speakers} speaker${body.speakers === 1 ? '' : 's'}` : ''));
   } catch (e) {
-    const cancelled = /cancel/i.test(e.message);
+    const cancelled = /cancel|abort/i.test(e.message) || e.name === 'AbortError';
     for (const k of job.claims)
-      setTrackState(k, cancelled ? 'cancelled' : 'failed', e.message);
+      setTrackState(k, cancelled ? 'cancelled' : 'failed', cancelled ? '' : e.message);
     status((cancelled ? 'cancelled: ' : `${job.model} failed: `) + e.message, !cancelled);
-    if (cancelled) S.aborted = true;
+    // A concurrent job failing must not cancel the recogniser chain beside it.
+    if (cancelled && !job.concurrent) S.aborted = true;
   } finally {
-    S.running = null;
+    if (job.concurrent) { S.side = null; S.sideAbort = null; }
+    else S.running = null;
+    renderPlan();
   }
 }
 
 async function runPlan(only) {
-  if (S.running) { status('a job is already running', true); return; }
+  if (S.running || S.side) { status('a job is already running', true); return; }
   const jobs = buildJobs(only);
   if (!jobs.length) { status('choose a model for at least one tier', true); return; }
   S.aborted = false;
   for (const job of jobs) for (const k of job.claims) setTrackState(k, 'queued', '');
-  for (const job of jobs) {
+
+  /* The CPU job is started, not awaited: that is the entire point of keeping
+     the diarizer out of the GPU group. The recogniser chain runs in order
+     beside it, and both are awaited before the panel is called idle. */
+  const beside = jobs.filter(j => j.concurrent).map(j => runJob(j));
+  for (const job of jobs.filter(j => !j.concurrent)) {
     if (S.aborted) { for (const k of job.claims) setTrackState(k, 'cancelled'); continue; }
     await runJob(job);
   }
+  await Promise.all(beside);
   const j = await NET.progress();
   if (!j || !j.active) { stopPolling(); showIdle(); }
   renderPlan();
@@ -1912,6 +2040,7 @@ async function runPlan(only) {
 $('run').addEventListener('click', () => runPlan());
 $('reWord').addEventListener('click', () => runPlan('word'));
 $('rePhone').addEventListener('click', () => runPlan('phone'));
+$('reSpeaker').addEventListener('click', () => runPlan('speaker'));
 
 /* --------------------------------------------------------------- settings */
 function openSettings(open) { $('settings').hidden = !open; }
@@ -1972,10 +2101,16 @@ function toTextGrid(dur) {
   };
   const nm = (base, track) =>
     CFG.nameTiers && track.source ? `${base} (${track.source})` : base;
+  /* words and phones are written even when empty, so an untouched file still
+     exports a grid you can annotate by hand in Praat. An optional tier is
+     written only when it has intervals: nobody wants a blank speaker tier in
+     every TextGrid this tool has ever produced. */
+  const emit = TIERS.filter(T => !T.optional || S.tracks[T.key].items.length);
   let out = 'File type = "ooTextFile"\nObject class = "TextGrid"\n\n';
-  out += `xmin = 0\nxmax = ${dur}\ntiers? <exists>\nsize = 2\nitem []:\n`;
-  out += `    item [1]:\n${tier(nm('words', S.tracks.word), S.tracks.word.items)}`;
-  out += `    item [2]:\n${tier(nm('phones', S.tracks.phone), S.tracks.phone.items)}`;
+  out += `xmin = 0\nxmax = ${dur}\ntiers? <exists>\nsize = ${emit.length}\nitem []:\n`;
+  emit.forEach((T, i) => {
+    out += `    item [${i + 1}]:\n${tier(nm(T.label, S.tracks[T.key]), S.tracks[T.key].items)}`;
+  });
   return out;
 }
 
@@ -1996,7 +2131,7 @@ $('dlTextGrid').addEventListener('click', () =>
 
 $('dlTsv').addEventListener('click', () => {
   const rows = ['tier\tstart\tend\tduration\tlabel'];
-  for (const k of ['word', 'phone'])
+  for (const k of TKEYS)
     for (const it of S.tracks[k].items)
       rows.push(`${k}\t${it.start.toFixed(4)}\t${it.end.toFixed(4)}\t` +
                 `${(it.end - it.start).toFixed(4)}\t${it.text}`);

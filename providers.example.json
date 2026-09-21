@@ -15,6 +15,7 @@
     "  words  - orthographic transcription only",
     "  phones - IPA phone labels only",
     "  both   - fills the word tier and the phone tier from one pass",
+    "  speakers - who is talking; fills the speaker tier and nothing else",
     "The response is believed over this hint; it exists so the queue can show",
     "you what is coming."
   ],
@@ -31,7 +32,8 @@
         { "id": "ipa-buckeye", "role": "both",   "label": "ginic/Buckeye + whisper (English)" },
         { "id": "whisper",     "role": "words",  "label": "faster-whisper" },
         { "id": "mms",         "role": "words",  "label": "MMS-1b-all (needs a 639-3 language code)" },
-        { "id": "owsm",        "role": "words",  "label": "OWSM-CTC v4 1B" }
+        { "id": "owsm",        "role": "words",  "label": "OWSM-CTC v4 1B" },
+        { "id": "diarize",     "role": "speakers", "label": "Speaker diarization (CPU, runs alongside)" }
       ]
     },
 

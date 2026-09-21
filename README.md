@@ -20,7 +20,7 @@ A spoken German text about the 2010 Haiti earthquake, at 35.9 seconds. One model
 - A spectrogram carrying **f0**, **F1**, **F2** and **F3**, with a frequency axis on the left and a separate f0 axis on the right.
 - An **intensity** curve on its own decibel axis.
 - A cursor readout of time, cursor frequency, f0, F1 to F3, intensity and the annotation label underneath.
-- Word and phone tiers, and a **segment table** giving every interval a start, an end and a duration in milliseconds, exportable as TSV.
+- Word, phone and speaker tiers, and a **segment table** giving every interval a start, an end and a duration in milliseconds, exportable as TSV.
 - Selection statistics: duration, its reciprocal in hertz as Praat reports it, mean f0 over the voiced frames, and how many intervals the selection covers.
 - **TextGrid export**, including an empty grid spanning the file, which is how a hand annotation begins in Praat.
 - Two colour schemes. **Graphite** is the default, and **Paper** puts the analysis on white so the screen shows what a figure will look like on the page. Both keep Praat's convention of dark for loud, because a phonetics tool should not invert the picture every textbook uses.
@@ -89,6 +89,18 @@ The same machinery survives a reload. The page asks the recogniser what it is do
 
 It asks late, and deliberately. On a gateway that swaps models through one GPU, requesting the recogniser's progress is enough to make the gateway start the recogniser, which unloads whatever else was holding the card. Opening a spectrogram would then evict a colleague's language model before any audio had been chosen. The question is therefore held back until audio is loaded and a tier has a model assigned, which together mean recognition is actually intended. Nothing is lost by waiting, because a browser cannot keep a file across a reload either.
 
+## Who is speaking, and why it does not wait its turn
+
+A third tier answers a different question from the other two. Word and phone tiers record what was said. A speaker tier records who said it, and it needs neither a language code nor a transcription in order to do so, because a speaker embedding keys on the voice rather than on the words. That independence is not a detail of the implementation. It is what allows the tier to be added without slowing anything else down.
+
+The diarizer runs pyannote's segmentation model and a speaker embedding through onnxruntime, on the processor, and allocates no video memory at all. A recogniser on a single card has to wait for whatever else holds that card, and on the machine this was built for a gateway enforces exactly one tenant. The diarizer sits outside that arrangement, so it starts at the same moment the recogniser does and is usually finished while the transcription is still running. Measured on eight cores, ten minutes of audio costs about forty five seconds.
+
+Two arguments sit beside the model, and between them they are the analysis. The count fixes how many speakers to find. Leaving it blank hands that decision to a clustering threshold instead, and the threshold is not a default to be left alone. On one ten minute recording it returned sixteen speakers at 0.5 and two at 1.1, from identical audio and an identical model. A tool that hid that number behind a reasonable-looking default would be presenting a guess as a measurement. Both fields are editable for the same reason every Praat argument on the right of the screen is editable.
+
+The result exports as an ordinary interval tier named `speakers`, labelled S1, S2 and so on in the order the voices first appear, which is the convention Praat, ELAN and CLAN share. It is written only when it has intervals, so a TextGrid from a recording nobody diarized keeps exactly the shape it had before this tier existed.
+
+One limit is worth stating plainly. The segmentation model detects overlapping speech and the clustering step then discards it, because a TextGrid tier cannot hold two intervals at the same time. Where two people talk over each other, the tier names one of them.
+
 ## Getting the annotation out
 
 The export is a TextGrid because that is the format both major annotation tools read. Praat opens it directly. ELAN imports it through File > Import > Praat TextGrid File, adding each tier to the open document or creating a new one, and it accepts UTF-8 as well as UTF-16, so the encoding written here needs no conversion.
@@ -111,7 +123,8 @@ There are two ways to reach one, and the tool does not prefer either.
     { "id": "local", "label": "llama-swap", "kind": "openai",
       "base": "http://127.0.0.1:9292", "control": "/upstream/asr",
       "models": [ { "id": "ipa", "role": "both" },
-                  { "id": "whisper", "role": "words" } ] },
+                  { "id": "whisper", "role": "words" },
+                  { "id": "diarize", "role": "speakers" } ] },
 
     { "id": "openai", "label": "OpenAI", "kind": "openai",
       "base": "https://api.openai.com", "api_key_env": "OPENAI_API_KEY",
@@ -123,7 +136,7 @@ There are two ways to reach one, and the tool does not prefer either.
 
 This mode exists for three reasons, and only the first is about secrecy. An API key stays on the machine running `serve.py`, which is told to read it from the environment and never sends it to the browser. Every request is same-origin, so there is no CORS to configure, which is what makes the tool usable by a colleague who did not set the recogniser up. And providers disagree about where word timings live, so the server normalises the reply and the page parses one contract instead of five.
 
-`role` says which tier a model can fill before it has run, so the queue can tell you what is coming. The reply is believed over the hint.
+`role` says which tier a model can fill before it has run, so the queue can tell you what is coming. It takes `words`, `phones`, `both` or `speakers`. The reply is believed over the hint, except for `speakers`, which also decides that the model runs alongside the others rather than behind them.
 
 A word of warning about the proxy. There is no authentication in `serve.py`. Anyone who can open the page can spend the keys behind it, so bind it to `127.0.0.1`, which is the default, or put it behind something that asks who is knocking. The server prints a warning if you bind it to a reachable address with keys configured.
 
@@ -151,6 +164,18 @@ The request is `multipart/form-data` carrying `file`, `model`, `response_format=
 
 `cues[].words[]` with `start` and `end` fills the word tier. Adding `phones` produces a phone tier as well. Adding `phone_times` is what distinguishes this from an even division of the word. Without it the viewer spaces the symbols evenly across the interval, which is a display convenience and carries no information about the recording. A response with cues but no words still draws one interval per cue, and says on the tier that the model timed segments rather than words.
 
+A cue carrying `speaker` and no words fills the speaker tier and nothing else:
+
+```jsonc
+{
+  "speakers": 2,
+  "cues": [{ "start": 0.03, "end": 6.04, "speaker": 0 },
+           { "start": 6.44, "end": 12.37, "speaker": 1 }]
+}
+```
+
+Such a reply must not carry `text` or `plain`, or a client routing cues by their content will read the turns as a transcription and overwrite a real one. Speaker numbers are zero based and are renumbered by order of first appearance before they are drawn. A diarization request carries `speakers`, `threshold`, `min_on` and `min_off` in place of `language`, and `role: "speakers"` in `providers.json` is what tells the interface that a model answers this way.
+
 An OpenAI-shaped reply needs no translation. The proxy maps `segments` to cues and puts the flat `words` list back into the segment each word falls in, which is why `timestamp_granularities[]=word` is worth asking for.
 
 Three optional endpoints are used if present and ignored if not.
@@ -171,6 +196,8 @@ Three optional endpoints are used if present and ignored if not.
 - **Formant dots appear during silence.** That is the Burg algorithm, which always returns a solution, rather than a fault in the tracker. Praat behaves identically.
 - Audio is re-encoded to 16 kHz mono WAV in the browser before Praat receives it. Praat's `readAudio` accepts WAV, AIFF, FLAC, MP3 and OGG, while the browser's own decoder also handles m4a, mp4 and webm, so re-encoding means anything your browser can play can be analysed.
 - A `File` object cannot survive a page reload, so re-select the audio after one. The annotation is adopted back from the recogniser, but the audio has to come from you.
+- **A proxy that whitelists form fields silently drops the ones you add later.** `serve.py` forwards a named list of extra fields and ignores the rest, which is right for a broker that also talks to OpenAI. The failure it produces, though, is a model quietly ignoring an argument you can see on screen, which reads as a broken model rather than a dropped field. New arguments have to be added to that list.
+- **The diarizer honours a cancel only at the end of its current pass.** sherpa-onnx accepts a return value from the progress callback and does not act on it, so a cancel at 14 seconds still ran the full 41. The page drops the connection as well, and the service releases its lock either way.
 - **A server that has no handler for a POST answers 501, not 404.** The check for "there is no recogniser here" has to cover 404, 405 and 501, or a perfectly clear misconfiguration arrives as an unexplained failure.
 
 ## Credits and licence

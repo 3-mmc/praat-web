@@ -251,10 +251,14 @@ def forward_transcription(p: dict, fields: dict, filename: str, filetype: str,
     }
     if fields.get('language'):
         send['language'] = fields['language']
-    # Pass through the extras our own service understands. A provider that does
-    # not know them ignores them; OpenAI rejects unknown fields on some routes,
-    # which is why they are opt-in per provider rather than always sent.
-    for extra in ('asr_model', 'translate_to'):
+    # Pass through the extras our own services understand: whisper size and
+    # translation target for the recognisers, clustering arguments for the
+    # diarizer. A provider that does not know them ignores them; OpenAI rejects
+    # unknown fields on some routes, which is why they are opt-in per provider
+    # rather than always sent. Anything missing here is silently dropped, which
+    # looks exactly like a model ignoring an argument -- add the name.
+    for extra in ('asr_model', 'translate_to',
+                  'speakers', 'threshold', 'min_on', 'min_off', 'embedding'):
         if fields.get(extra) and p.get('pass_extras', True):
             send[extra] = fields[extra]
     send.update(p.get('fields') or {})

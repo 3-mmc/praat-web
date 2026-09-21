@@ -97,6 +97,10 @@ The diarizer runs pyannote's segmentation model and a speaker embedding through 
 
 Two arguments sit beside the model, and between them they are the analysis. The count fixes how many speakers to find. Leaving it blank hands that decision to a clustering threshold instead, and the threshold is not a default to be left alone. On one ten minute recording it returned sixteen speakers at 0.5 and two at 1.1, from identical audio and an identical model. A tool that hid that number behind a reasonable-looking default would be presenting a guess as a measurement. Both fields are editable for the same reason every Praat argument on the right of the screen is editable.
 
+![praat-web with three tiers: words and phones from one recogniser, and a speaker tier underneath showing a change of voice from S1 to S2](docs/fig-speakers.png)
+
+Two German speakers, spliced into alternating six second blocks so that the right answer is known before the model runs. The window straddles the first change of voice, which the splice puts at exactly six seconds. The tier closes S1 at 6.04 and opens S2 at 6.44, leaving the silence between them attributed to nobody, which is the correct thing to do with it. The same pass has filled the word and phone tiers above it, and the cursor readout names the voice along with the labels: S2, the /ɑ/ of *Januar*, f0 113 Hz, F1 489 Hz, F2 1283 Hz, 66.1 dB. The speaker count and the clustering threshold sit beside the model, and **re-cluster** changes the number of voices without reading the audio again.
+
 The result exports as an ordinary interval tier named `speakers`, labelled S1, S2 and so on in the order the voices first appear, which is the convention Praat, ELAN and CLAN share. It is written only when it has intervals, so a TextGrid from a recording nobody diarized keeps exactly the shape it had before this tier existed.
 
 One limit is worth stating plainly. The segmentation model detects overlapping speech and the clustering step then discards it, because a TextGrid tier cannot hold two intervals at the same time. Where two people talk over each other, the tier names one of them.
@@ -108,6 +112,10 @@ A speaker tier on its own says when the voices change. What a transcript needs i
 Overlap is tallied per speaker rather than per turn. A cue running S1, S2, S1 gives S1 two separate overlaps, and choosing the single largest turn would hand that cue to S2 on a tie. What comes out is a voice on every word, a transcript grouped by turn, a voice column in the segment table, and the speaker named in the cursor readout.
 
 A span covering more than one voice is reported as covering more than one voice. This is not a rare case. A recogniser that returns cue-level intervals rather than word timings can easily produce a sixteen second cue containing two people, and attributing all of it to whoever held it longest would be a summary presented as a measurement. Such a span reads `S1 + S2` in the transcript and `S1+` in the table. Word timings make the question go away, because a word is short enough to belong to one voice.
+
+![The segment table with a voice column, and the transcript grouped by turn, one heading reading S2 + S1](docs/fig-speaker-turns.png)
+
+The same recording, in the two panels where the join shows. Every word carries the voice that said most of it, and the transcript is broken into turns. The heading `S2 + S1` is not a hedge but a reading: that cue begins before the change of voice and ends after it, so it really does contain two people.
 
 The exports carry it. The TSV gains a speaker column, SRT puts the name in the line, and WebVTT uses `<v S1>`, a cue voice span that players and the WebVTT DOM read as an attribution rather than as part of the text. WebVTT is the one subtitle format with a speaker of its own, which is why it is here.
 

@@ -166,10 +166,22 @@ def public_provider(p: dict) -> dict:
     }
 
 
-def control_url(p: dict, path: str) -> str | None:
-    if not p.get('control'):
+def control_url(p: dict, path: str, model: str | None = None) -> str | None:
+    """The control base for a provider, or for one model of it.
+
+    A gateway that swaps models puts each service behind its own path, so the
+    diarizer's progress and re-clustering do not live where the recogniser's
+    do. A model may therefore override the provider's `control`.
+    """
+    base = p.get('control')
+    if model:
+        for m in p.get('models') or []:
+            if m.get('id') == model and m.get('control'):
+                base = m['control']
+                break
+    if not base:
         return None
-    return p['base'].rstrip('/') + '/' + p['control'].strip('/') + path
+    return p['base'].rstrip('/') + '/' + base.strip('/') + path
 
 
 # ------------------------------------------------------- request forwarding
@@ -292,11 +304,15 @@ def forward_transcription(p: dict, fields: dict, filename: str, filetype: str,
         return 200, {'text': raw.decode('utf-8', 'replace'), 'cues': []}
 
 
-def proxy_control(p: dict, path: str, method='GET') -> tuple[int, dict]:
-    url = control_url(p, path)
+def proxy_control(p: dict, path: str, method='GET', model=None,
+                  body: bytes | None = None) -> tuple[int, dict]:
+    url = control_url(p, path, model)
     if not url:
         return 404, {'error': 'this provider declares no control endpoint'}
-    req = urllib.request.Request(url, method=method, data=b'' if method == 'POST' else None)
+    data = body if body is not None else (b'' if method == 'POST' else None)
+    req = urllib.request.Request(url, method=method, data=data)
+    if body is not None:
+        req.add_header('Content-Type', 'application/json')
     key = provider_key(p)
     if key:
         req.add_header('Authorization', 'Bearer ' + key)
@@ -406,6 +422,25 @@ class Handler(BaseHTTPRequestHandler):
             if not p:
                 return
             code, body = proxy_control(p, '/cancel', method='POST')
+            return self.send_json(code, body)
+        if route == '/api/recluster':
+            # A re-cluster carries no audio: the service still holds the
+            # recording from the pass that produced this hash.
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 < length <= 64 * 1024:
+                return self.send_json(400, {'error': 'expected a small JSON body'})
+            raw = self.rfile.read(length)
+            try:
+                want = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                return self.send_json(400, {'error': f'bad JSON: {exc}'})
+            p = self.pick_provider(want.get('provider'))
+            if not p:
+                return
+            code, body = proxy_control(
+                p, '/recluster', method='POST', model=want.get('model'),
+                body=json.dumps({'hash': want.get('hash'),
+                                 'speakers': want.get('speakers')}).encode())
             return self.send_json(code, body)
         if route != '/api/transcribe':
             return self.send_json(404, {'error': 'Not found'})

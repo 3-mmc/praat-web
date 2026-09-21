@@ -173,6 +173,10 @@
   #transcript .cue{margin-bottom:5px}
   #transcript .t{color:var(--dim2);font-family:var(--mono);font-size:10px;margin-right:5px}
   #transcript .ipa{color:var(--f2);display:block;margin-left:2px}
+  #transcript .turn{margin:9px 0 4px;font-family:var(--mono);font-size:10px;
+                    letter-spacing:.08em;color:var(--accent);
+                    border-top:1px solid var(--line2);padding-top:5px}
+  #transcript .turn:first-child{margin-top:0;border-top:0;padding-top:0}
 
   /* --------------------------------------------------------- settings */
   #settings{background:var(--panel2);border-bottom:1px solid var(--line)}
@@ -313,6 +317,7 @@
       <button id="dlTextGrid" disabled>⬇ TextGrid</button>
       <button id="dlSrt" disabled>⬇ SRT</button>
       <button id="dlAss" disabled>⬇ ASS</button>
+      <button id="dlVtt" disabled>⬇ VTT</button>
       <button id="dlTsv" disabled>⬇ TSV</button>
       <span class="sp"></span>
       <label title="Write the model that produced each tier into the tier name, so the provenance survives the export.">
@@ -370,6 +375,8 @@
         <label for="spkTh">threshold</label>
         <input id="spkTh" size="4" class="num" value="0.7"
                title="Clustering threshold, used only when the count is blank. Smaller splits more. This argument decides the answer: on one ten-minute recording 0.5 gave sixteen speakers and 1.1 gave two.">
+        <button class="tiny" id="spkRe" disabled
+                title="Re-partition the turns this recording already produced into the speaker count above, without reading the audio again. The service keeps the recording, so this costs a fraction of a full pass and nothing at all after the first one. A turn that has to be split gains a boundary at window resolution, which is coarser than a full pass would give.">re-cluster</button>
       </div>
       <div class="meta" id="mtSpeaker">who is talking, by voice</div>
     </div>
@@ -430,7 +437,7 @@
     </h2>
     <div class="scroll">
       <table class="seg" id="segTable">
-        <thead><tr><th>#</th><th class="l">label</th><th>start</th><th>end</th><th>dur ms</th></tr></thead>
+        <thead><tr><th>#</th><th class="l">label</th><th id="segSpkHead" hidden>voice</th><th>start</th><th>end</th><th>dur ms</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -1399,7 +1406,13 @@ $('tiers').addEventListener('pointerdown', e => {
 function labelAt(t) {
   const w = S.tracks.word.items.find(it => it.start <= t && t <= it.end);
   const p = S.tracks.phone.items.find(it => it.start <= t && t <= it.end);
-  return [p && p.text, w && w.text].filter(Boolean).join(' / ') || '—';
+  const lab = [p && p.text, w && w.text].filter(Boolean).join(' / ');
+  // The voice goes in front of the labels rather than into a column of its
+  // own, so the readout row does not carry a permanently empty cell for
+  // everyone who never diarizes anything.
+  const spk = speakerAt(t);
+  return [spk, lab].filter(Boolean).join(' · ') || '—';
+
 }
 
 function probe(t, cursorHz) {
@@ -1517,6 +1530,9 @@ const NET = {
 
   transcribeUrl() {
     return NET.mode === 'broker' ? apiUrl('/transcribe') : asrUrl('/v1/audio/transcriptions');
+  },
+  reclusterUrl() {
+    return NET.mode === 'broker' ? apiUrl('/recluster') : ctrlUrl('/recluster');
   },
   controlPath(tail) {
     if (NET.mode === 'broker') {
@@ -1638,6 +1654,7 @@ function renderPlan() {
     $('planNote').textContent +=
       ` ${pt.source} returned per-word boundaries — choose it for the word tier too.`;
   $('run').disabled = !S.audio || !!S.running || !!S.side || (!wm && !pm && !sm);
+  $('spkRe').disabled = !canRecluster();
   updateTierInfo();
 }
 
@@ -1655,7 +1672,7 @@ function updateTierInfo() {
   if (spk) parts.push(spk === 1 ? 'one voice' : `${spk} voices`);
   $('tierinfo').textContent = any ? parts.join(' · ')
     : 'no annotation yet — export an empty TextGrid, or run a recogniser';
-  $('dlSrt').disabled = $('dlAss').disabled =
+  $('dlSrt').disabled = $('dlAss').disabled = $('dlVtt').disabled =
     !(S.tracks.word.cues.length || S.tracks.phone.cues.length);
   $('dlTsv').disabled = !any;
 }
@@ -1670,6 +1687,7 @@ for (const T of TIERS) {
   });
 }
 $('spkN').value = CFG.spkCount; $('spkTh').value = CFG.spkThreshold;
+$('spkN').addEventListener('input', () => { $('spkRe').disabled = !canRecluster(); });
 $('spkN').addEventListener('change', () => { CFG.spkCount = $('spkN').value.trim(); saveCfg(); });
 $('spkTh').addEventListener('change', () => { CFG.spkThreshold = $('spkTh').value.trim(); saveCfg(); });
 $('lngWord').value = CFG.langWord; $('lngPhone').value = CFG.langPhone;
@@ -1740,6 +1758,71 @@ function itemsFrom(cues, kind) {
   return { items: tidy(out, S.dur || 0), cueLevel };
 }
 
+/* Which voice owns a span. Overlap is tallied per SPEAKER, not per turn: a cue
+   running S1, S2, S1 gives S1 two separate overlaps, and picking the single
+   largest turn would hand the cue to S2 on a tie. Midpoint would be worse
+   still, since it flips on a millisecond exactly where turns change hands.
+
+   A span that covers more than one voice is reported as such rather than
+   quietly attributed to the loudest share. That happens whenever a recogniser
+   returns cue-level intervals instead of word timings, and a sixteen-second
+   cue really can contain two people. */
+const MIXED_BELOW = 0.8;
+function speakerFor(a, b) {
+  const tally = new Map();
+  for (const t of S.tracks.speaker.items) {
+    if (t.end <= a) continue;
+    if (t.start >= b) break;
+    const ov = Math.min(b, t.end) - Math.max(a, t.start);
+    if (ov > 0) tally.set(t.text, (tally.get(t.text) || 0) + ov);
+  }
+  if (!tally.size) return null;
+  const ranked = [...tally].sort((x, y) => y[1] - x[1]);
+  const total = ranked.reduce((sum, r) => sum + r[1], 0);
+  return { name: ranked[0][0], share: ranked[0][1] / total,
+           all: ranked.map(r => r[0]) };
+}
+
+/* One voice reads as its name. Several read as a name with a marker, because
+   the difference between "S1 said this" and "mostly S1" is the difference
+   between a measurement and a summary. */
+function voiceLabel(o, joined) {
+  if (!o || !o.name) return '';
+  if (o.share >= MIXED_BELOW || o.all.length < 2) return o.name;
+  return joined ? o.all.join(' + ') : o.name + '+';
+}
+const speakerAt = t =>
+  (S.tracks.speaker.items.find(it => it.start <= t && t <= it.end) || {}).text || null;
+
+/* The join between what was said and who said it. It lives here, in the page,
+   and not in either service, because the two tiers come from different models
+   that run at the same time and finish in either order. Neither one can do it,
+   and doing it once at the end would mean a transcript that only gains its
+   speakers if the diarizer happens to finish last. So it is redone whenever
+   either side changes, and it costs nothing when there is no speaker tier. */
+function stampSpeakers() {
+  const any = S.tracks.speaker.items.length > 0;
+  const who = (a, b) => (any ? speakerFor(a, b) : null);
+  for (const k of ['word', 'phone'])
+    for (const it of S.tracks[k].items) {
+      it.voice = who(it.start, it.end);
+      it.speaker = it.voice ? it.voice.name : null;
+    }
+  /* Both tracks' cues as well as the transcript, and not only the transcript.
+     When one model fills both tiers these are the same array and stamping is
+     idempotent, but two models give two separate cue lists, and the subtitle
+     exports read the phone list rather than whichever one was merged last. */
+  for (const list of [S.tracks.word.cues, S.tracks.phone.cues, S.transcript])
+    for (const c of list || []) {
+      c.voice = who(c.start, c.end);
+      c.speaker = c.voice ? c.voice.name : null;
+      for (const w of c.words || []) {
+        const v = who(w.start, w.end);
+        w.speaker = v ? v.name : null;
+      }
+    }
+}
+
 function assignTrack(key, cues, source, state) {
   const t = S.tracks[key];
   const { items, cueLevel } = itemsFrom(cues, key);
@@ -1751,7 +1834,8 @@ function assignTrack(key, cues, source, state) {
                speaker: 'this model found no speech to attribute' }[key] || '';
   else if (cueLevel)
     t.note = 'cue-level intervals: the model timed segments, not words';
-  renderPlan(); renderSegments(); drawTiers(); updateTierInfo();
+  stampSpeakers();
+  renderPlan(); renderSegments(); drawTiers(); updateTierInfo(); renderTranscript();
 }
 
 function setTrackState(key, state, note) {
@@ -1763,6 +1847,7 @@ function setTrackState(key, state, note) {
 
 function mergeTranscript(cues) {
   S.transcript = cues || [];
+  stampSpeakers();
   renderTranscript();
 }
 
@@ -1770,25 +1855,39 @@ function renderTranscript() {
   const el = $('transcript');
   if (!S.transcript.length) { el.className = 'hint'; el.textContent = 'nothing yet'; return; }
   el.className = '';
-  el.innerHTML = S.transcript.map(c => {
+  /* Grouped by turn when there is a speaker tier, and byte-identical to what
+     it was when there is not: `cur` starts undefined and every cue reports a
+     null speaker, so no heading is ever emitted. */
+  const out = [];
+  let cur;
+  for (const c of S.transcript) {
+    const spk = voiceLabel(c.voice, true) || null;
+    if (spk !== cur) { cur = spk; if (spk) out.push(`<div class="turn">${esc(spk)}</div>`); }
     const text = (c.plain ?? (c.words || []).map(w => w.text).join(' ') ?? '').trim();
     const ipa = (c.words || []).map(w => (w.phones || []).join('')).join(' ').trim();
-    return `<div class="cue"><span class="t">${f2(c.start)}</span>${esc(text)}` +
-           (ipa ? `<span class="ipa">${esc(ipa)}</span>` : '') + `</div>`;
-  }).join('');
+    out.push(`<div class="cue"><span class="t">${f2(c.start)}</span>${esc(text)}` +
+             (ipa ? `<span class="ipa">${esc(ipa)}</span>` : '') + `</div>`);
+  }
+  el.innerHTML = out.join('');
   el.scrollTop = el.scrollHeight;
 }
 
 function renderSegments() {
   const key = $('segWhich').value;
   const items = S.tracks[key].items;
+  /* The voice column appears only where it says something: on the speaker tier
+     itself the label already is the voice, and with no diarization there is
+     nothing to put in it. */
+  const spk = key !== 'speaker' && items.some(it => it.speaker);
+  $('segSpkHead').hidden = !spk;
   $('segCount').textContent = items.length ? `${items.length} intervals` : 'none';
   const body = items.map((it, i) =>
     `<tr data-i="${i}"><td>${i + 1}</td><td class="l">${esc(it.text || '')}</td>` +
+    (spk ? `<td title="${esc((it.voice && it.voice.all || []).join(' + '))}">${esc(voiceLabel(it.voice))}</td>` : '') +
     `<td>${it.start.toFixed(3)}</td><td>${it.end.toFixed(3)}</td>` +
     `<td>${((it.end - it.start) * 1000).toFixed(0)}</td></tr>`).join('');
   $('segTable').tBodies[0].innerHTML = body ||
-    '<tr><td colspan="5" class="l" style="color:var(--dim2)">no intervals on this tier</td></tr>';
+    `<tr><td colspan="${spk ? 6 : 5}" class="l" style="color:var(--dim2)">no intervals on this tier</td></tr>`;
 }
 $('segWhich').addEventListener('change', renderSegments);
 $('segTable').addEventListener('click', e => {
@@ -1805,8 +1904,10 @@ $('segTable').addEventListener('click', e => {
 });
 $('segCopy').addEventListener('click', () => {
   const key = $('segWhich').value;
-  const tsv = 'start\tend\tduration\tlabel\n' + S.tracks[key].items
-    .map(it => `${it.start.toFixed(4)}\t${it.end.toFixed(4)}\t${(it.end - it.start).toFixed(4)}\t${it.text}`)
+  const spk = key !== 'speaker' && S.tracks[key].items.some(it => it.speaker);
+  const tsv = `start\tend\tduration${spk ? '\tspeaker' : ''}\tlabel\n` + S.tracks[key].items
+    .map(it => `${it.start.toFixed(4)}\t${it.end.toFixed(4)}\t${(it.end - it.start).toFixed(4)}` +
+               `${spk ? '\t' + (it.speaker || '') : ''}\t${it.text}`)
     .join('\n');
   navigator.clipboard?.writeText(tsv).then(
     () => status(`${key} tier copied as TSV`),
@@ -1946,6 +2047,61 @@ function buildJobs(only) {
   return out;
 }
 
+/* Identity of the audio currently loaded. A hash from the previous file would
+   re-cluster the wrong recording, and the service has no way to notice. */
+function fileKey() {
+  const f = $('file').files[0];
+  return f ? `${f.name}:${f.size}:${f.lastModified}` : null;
+}
+
+function canRecluster() {
+  const c = S.tracks.speaker.cached;
+  return !!(c && c.hash && c.file && c.file === fileKey() &&
+            parseInt($('spkN').value, 10) >= 1 && !S.running && !S.side);
+}
+
+/* Change the number of voices without reading the audio again. The service
+   still holds the recording from the pass that produced this hash, so this is
+   a clustering call rather than a full pass: measured 9 s for the first one on
+   ten minutes of audio and 0.2 s for every one after it, against 43 s.
+
+   It takes a count and not a threshold, deliberately. The re-clustering runs a
+   different implementation from the full pass, so the same threshold number
+   would mean two different things depending on which route produced it. A
+   count means the same thing either way. */
+async function reclusterSpeakers() {
+  const t = S.tracks.speaker;
+  const n = parseInt($('spkN').value, 10);
+  if (!canRecluster()) return;
+  const prev = t.state;
+  setTrackState('speaker', 'running', '');
+  const t0 = performance.now();
+  try {
+    const r = await fetch(NET.reclusterUrl(), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: NET.provider?.id, model: t.model,
+                             hash: t.cached.hash, speakers: n }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 409 || body.stale) {
+      t.cached = null;
+      throw new Error('the diarizer no longer holds this recording — run it again');
+    }
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    applyCues(body.cues || [], t.model + ' (re-clustered)', 'done', ['speaker']);
+    if (body.window_resolution)
+      setTrackState('speaker', 'done',
+        'a turn was split, so its new boundary is at window resolution — ' +
+        're-run the model for the segmentation model\'s own boundaries');
+    status(`re-clustered to ${body.speakers} speaker${body.speakers === 1 ? '' : 's'} ` +
+           `in ${f2((performance.now() - t0) / 1000)} s`);
+  } catch (e) {
+    setTrackState('speaker', prev === 'running' ? 'failed' : prev, e.message);
+    status('re-cluster failed: ' + e.message, true);
+  }
+  renderPlan();
+}
+
 async function runJob(job) {
   const f = $('file').files[0];
   if (!f) throw new Error('no audio file');
@@ -1993,6 +2149,11 @@ async function runJob(job) {
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
 
     const cues = body.cues || [];
+    /* The service keeps this recording against its hash, which is what makes a
+       re-cluster possible. Tie it to the file identity as well: a hash from the
+       previous file would re-cluster the wrong recording. */
+    if (job.concurrent)
+      S.tracks.speaker.cached = body.hash ? { hash: body.hash, file: fileKey() } : null;
     applyCues(cues, job.model, 'done', job.claims);
     if (!cues.length && (body.text || '').trim()) {
       mergeTranscript([{ start: 0, end: S.dur, plain: body.text.trim() }]);
@@ -2041,6 +2202,7 @@ $('run').addEventListener('click', () => runPlan());
 $('reWord').addEventListener('click', () => runPlan('word'));
 $('rePhone').addEventListener('click', () => runPlan('phone'));
 $('reSpeaker').addEventListener('click', () => runPlan('speaker'));
+$('spkRe').addEventListener('click', reclusterSpeakers);
 
 /* --------------------------------------------------------------- settings */
 function openSettings(open) { $('settings').hidden = !open; }
@@ -2130,11 +2292,11 @@ $('dlTextGrid').addEventListener('click', () =>
   download(S.name + '.TextGrid', toTextGrid(S.dur || 0)));
 
 $('dlTsv').addEventListener('click', () => {
-  const rows = ['tier\tstart\tend\tduration\tlabel'];
+  const rows = ['tier\tstart\tend\tduration\tspeaker\tlabel'];
   for (const k of TKEYS)
     for (const it of S.tracks[k].items)
       rows.push(`${k}\t${it.start.toFixed(4)}\t${it.end.toFixed(4)}\t` +
-                `${(it.end - it.start).toFixed(4)}\t${it.text}`);
+                `${(it.end - it.start).toFixed(4)}\t${it.speaker || ''}\t${it.text}`);
   download(S.name + '.intervals.tsv', rows.join('\n'), 'text/tab-separated-values');
 });
 
@@ -2142,9 +2304,27 @@ $('dlSrt').addEventListener('click', () => {
   const body = subtitleCues().map((c, i) => {
     const ipa = (c.words || []).map(w => (w.phones || []).join('')).join(' ').trim();
     const text = (c.plain ?? (c.words || []).map(w => w.text).join(' ')).trim();
-    return `${i + 1}\n${ts(c.start)} --> ${ts(c.end)}\n${ipa || text}\n`;
+    // SRT has no speaker syntax, so the name goes in the line, which is what
+    // every subtitling convention does anyway.
+    const who = c.speaker ? c.speaker + ': ' : '';
+    return `${i + 1}\n${ts(c.start)} --> ${ts(c.end)}\n${who}${ipa || text}\n`;
   }).join('\n');
   download(S.name + '.ipa.srt', body);
+});
+
+/* WebVTT, because it is the one subtitle format with a speaker of its own:
+   `<v S1>` is a cue voice span, which players and the WebVTT DOM API read as
+   an attribution rather than as part of the line. That makes it the honest
+   export for a transcript that has been through diarization. */
+$('dlVtt').addEventListener('click', () => {
+  const body = subtitleCues().map(c => {
+    const ipa = (c.words || []).map(w => (w.phones || []).join('')).join(' ').trim();
+    const text = (c.plain ?? (c.words || []).map(w => w.text).join(' ')).trim();
+    const line = (ipa || text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `${ts(c.start, false)} --> ${ts(c.end, false)}\n` +
+           (c.speaker ? `<v ${c.speaker}>${line}</v>\n` : line + '\n');
+  }).join('\n');
+  download(S.name + '.ipa.vtt', 'WEBVTT\n\n' + body, 'text/vtt');
 });
 
 $('dlAss').addEventListener('click', () => {

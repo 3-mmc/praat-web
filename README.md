@@ -101,7 +101,27 @@ The result exports as an ordinary interval tier named `speakers`, labelled S1, S
 
 One limit is worth stating plainly. The segmentation model detects overlapping speech and the clustering step then discards it, because a TextGrid tier cannot hold two intervals at the same time. Where two people talk over each other, the tier names one of them.
 
+### Attaching the voices to the words
+
+A speaker tier on its own says when the voices change. What a transcript needs is who said each word, and that join happens in the page rather than in either service. The two tiers come from different models that run at the same time and finish in either order, neither can see the other's output, and doing the join once at the end would produce a transcript that gains its speakers only when the diarizer happens to finish last.
+
+Overlap is tallied per speaker rather than per turn. A cue running S1, S2, S1 gives S1 two separate overlaps, and choosing the single largest turn would hand that cue to S2 on a tie. What comes out is a voice on every word, a transcript grouped by turn, a voice column in the segment table, and the speaker named in the cursor readout.
+
+A span covering more than one voice is reported as covering more than one voice. This is not a rare case. A recogniser that returns cue-level intervals rather than word timings can easily produce a sixteen second cue containing two people, and attributing all of it to whoever held it longest would be a summary presented as a measurement. Such a span reads `S1 + S2` in the transcript and `S1+` in the table. Word timings make the question go away, because a word is short enough to belong to one voice.
+
+The exports carry it. The TSV gains a speaker column, SRT puts the name in the line, and WebVTT uses `<v S1>`, a cue voice span that players and the WebVTT DOM read as an attribution rather than as part of the text. WebVTT is the one subtitle format with a speaker of its own, which is why it is here.
+
+### Changing the number of voices without reading the audio again
+
+The count is the argument worth iterating on, and a full pass costs forty seconds. So the service keeps the recording from the last job against a hash, and the **re-cluster** button re-partitions the turns it already found into a different number of voices. Measured on ten minutes of audio: nine seconds for the first re-cluster, which computes and then keeps the embeddings, and about two tenths of a second for every one after it, against forty three for a full pass.
+
+It takes a count and never a threshold. The re-clustering is the service's own average linkage rather than the one inside sherpa-onnx, so the same threshold number would mean two different things depending on which route produced it. A count means the same thing either way.
+
+One cost of this is visible in the interface. A turn whose windows all agree keeps the segmentation model's own boundaries. A turn that genuinely has to be split gains a boundary at window resolution, which is one second rather than the model's own, and the tier says so whenever it happens. Running the model again gives the precise boundaries back.
+
 ## Getting the annotation out
+
+Subtitles come out as SRT, ASS or WebVTT, and WebVTT is the one to pick when the recording has been diarized, because `<v S1>` attributes a cue to a voice rather than writing the name into the line. The rest of this section is about the TextGrid, which is the export that matters for annotation work.
 
 The export is a TextGrid because that is the format both major annotation tools read. Praat opens it directly. ELAN imports it through File > Import > Praat TextGrid File, adding each tier to the open document or creating a new one, and it accepts UTF-8 as well as UTF-16, so the encoding written here needs no conversion.
 
@@ -185,6 +205,9 @@ Three optional endpoints are used if present and ignored if not.
 | `GET {control}/progress` | `{active, model, stage, done, total, elapsed, job, cues_ready}` for the progress bar |
 | `GET {control}/partial?since=N` | `{job, cues, since, total, complete}`, the cues finished so far |
 | `POST {control}/cancel` | a Stop button that actually stops the job |
+| `POST {control}/recluster` | `{hash, speakers}` re-partitions a cached diarization without re-reading the audio |
+
+A model may carry its own `control` in `providers.json`, overriding the provider's. On a gateway that swaps models, each service sits behind its own path, so the diarizer's progress and re-clustering do not live where the recogniser's do. A diarization reply that carries a `hash` is what enables the re-cluster button, and a service that returns none simply does not offer one.
 
 `cues_ready` on the progress reply is the count of cues available, and `partial` returns those after index `N` in the same shape as the final response. `job` rises once per job, so a client that sees it change knows its accumulated cues belong to a previous run. These three are what turn the tiers from a result into a display that fills while you watch, and a recogniser that omits them still works.
 
@@ -197,6 +220,7 @@ Three optional endpoints are used if present and ignored if not.
 - Audio is re-encoded to 16 kHz mono WAV in the browser before Praat receives it. Praat's `readAudio` accepts WAV, AIFF, FLAC, MP3 and OGG, while the browser's own decoder also handles m4a, mp4 and webm, so re-encoding means anything your browser can play can be analysed.
 - A `File` object cannot survive a page reload, so re-select the audio after one. The annotation is adopted back from the recogniser, but the audio has to come from you.
 - **A proxy that whitelists form fields silently drops the ones you add later.** `serve.py` forwards a named list of extra fields and ignores the rest, which is right for a broker that also talks to OpenAI. The failure it produces, though, is a model quietly ignoring an argument you can see on screen, which reads as a broken model rather than a dropped field. New arguments have to be added to that list.
+- **Clustering windows of unequal length clusters the lengths.** Re-clustering embeds fixed windows across the speech the first pass found, and the short remainder window at the end of each turn embedded more like the other short windows than like its own speaker. The first split came out as "short windows versus long windows", which put a spurious change of voice in the last second of every turn in a two-speaker file. The final window of a turn is now pushed flush against its end so that it is full length, and windows below 1.2 seconds are attached to the nearest cluster afterwards rather than clustered.
 - **The diarizer honours a cancel only at the end of its current pass.** sherpa-onnx accepts a return value from the progress callback and does not act on it, so a cancel at 14 seconds still ran the full 41. The page drops the connection as well, and the service releases its lock either way.
 - **A server that has no handler for a POST answers 501, not 404.** The check for "there is no recogniser here" has to cover 404, 405 and 501, or a perfectly clear misconfiguration arrives as an unexplained failure.
 

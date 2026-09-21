@@ -33,7 +33,8 @@
         { "id": "whisper",     "role": "words",  "label": "faster-whisper" },
         { "id": "mms",         "role": "words",  "label": "MMS-1b-all (needs a 639-3 language code)" },
         { "id": "owsm",        "role": "words",  "label": "OWSM-CTC v4 1B" },
-        { "id": "diarize",     "role": "speakers", "label": "Speaker diarization (CPU, runs alongside)" }
+        { "id": "diarize",     "role": "speakers", "control": "/upstream/diarize",
+          "label": "Speaker diarization (CPU, runs alongside)" }
       ]
     },
 
